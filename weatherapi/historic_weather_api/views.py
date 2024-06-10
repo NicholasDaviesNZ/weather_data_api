@@ -2,7 +2,13 @@ from django.shortcuts import render
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from datetime import datetime
-
+import pandas as pd
+from django.conf import settings
+import os
+from django.templatetags.static import static
+from scipy.spatial.distance import cdist
+import numpy as np
+import polars as pl
 
 # Create your views here.
 @api_view(['GET'])
@@ -15,12 +21,14 @@ def test(request):
 # to check that all var_names are in the accseptable list for that datasourse/view
 # to check that start and end date are valid
 
+def calculate_distance(x1, y1, x2, y2):
+    return np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
 @api_view(['GET'])
 def get_nasapower(request):
     # Get the location, var_name, start_date, and end_date query parameters from the request
-    lat = request.query_params.get('lat', None)
-    lon = request.query_params.get('lon', None)
+    lat = float(request.query_params.get('lat', None))
+    lon = float(request.query_params.get('lon', None))
     var_names = request.query_params.get('var_name', None)
     start_date_str = request.query_params.get('start_date', None)
     end_date_str = request.query_params.get('end_date', None)
@@ -53,6 +61,56 @@ def get_nasapower(request):
     
     # Create a response message including the location and var_names
     message = f"This is a nasapower response for location: {lat},{lon} and the variable(s): {', '.join(var_names_list)} between {start_date} and {end_date}"
+    coords_url = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_merra2.csv')
+    coords_df = pd.read_csv(coords_url)
     
-    # Return the response
+    coords_df['latitude'] = (coords_df['latitude']).astype(float)
+    coords_df['longitude'] = (coords_df['longitude']).astype(float)
+
+    p_lat = coords_df['latitude'][(coords_df['latitude'] - lat) >= 0].min()
+    p_lon = coords_df['longitude'][(coords_df['longitude'] - lon) >= 0].min()
+    n_lat = coords_df['latitude'][(coords_df['latitude'] - lat) < 0].max()
+    n_lon = coords_df['longitude'][(coords_df['longitude'] - lon) < 0].max()
+
+    points = [
+        (p_lat, n_lon),  
+        (p_lat, p_lon),  
+        (n_lat, n_lon),  
+        (n_lat, p_lon)   
+    ]
+    given_point = (lat, lon)
+    closest_df = pd.merge(pd.DataFrame(points, columns=['latitude', 'longitude']), coords_df, on=['latitude', 'longitude'], how='left')
+    
+
+    distances = closest_df.apply(lambda row: calculate_distance(given_point[0], given_point[1], row['latitude'], row['longitude']), axis=1)
+
+    weights = 1 / distances
+    weights = weights / weights.sum()
+    print("Weights:", weights)
+    
+    # now load the points from the loc_ids in closest_df and the var_name to load with polars the parquet files
+    print(var_names) # note there is no test, or handling if more than one var name is passed in
+    print(closest_df)
+    print(int(closest_df.iloc[0]['loc_id']))
+    file_0_name = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'nasapower', f"{var_names}_{int(closest_df.iloc[0]['loc_id'])}.parquet")
+    file_1_name = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'nasapower', f"{var_names}_{int(closest_df.iloc[1]['loc_id'])}.parquet")
+    file_2_name = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'nasapower', f"{var_names}_{int(closest_df.iloc[2]['loc_id'])}.parquet")
+    file_3_name = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'nasapower', f"{var_names}_{int(closest_df.iloc[3]['loc_id'])}.parquet")
+    
+    loc_0 = pl.read_parquet(file_0_name)*weights[0]
+    loc_1 = pl.read_parquet(file_1_name)*weights[1]
+    loc_2 = pl.read_parquet(file_2_name)*weights[2]
+    loc_3 = pl.read_parquet(file_3_name)*weights[3]
+
+    #df = pl.concat([loc_0, loc_1, loc_2, loc_3])
+    print(loc_0)
+    print(loc_1)
+    print(loc_2)
+    print(loc_3)
+    # then subset by start_date and end_date
+    # multiply each time series by its weight
+    # add them togeather to create a single time series and time
+    # convert to json
+    # pass out to user
+    
     return Response({"message": message})
