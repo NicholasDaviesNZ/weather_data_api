@@ -88,28 +88,35 @@ def get_nasapower(request):
     weights = weights / weights.sum()
     print("Weights:", weights)
     
-    # now load the points from the loc_ids in closest_df and the var_name to load with polars the parquet files
-    print(var_names) # note there is no test, or handling if more than one var name is passed in
-    print(closest_df)
-    print(int(closest_df.iloc[0]['loc_id']))
     file_0_name = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'nasapower', f"{var_names}_{int(closest_df.iloc[0]['loc_id'])}.parquet")
     file_1_name = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'nasapower', f"{var_names}_{int(closest_df.iloc[1]['loc_id'])}.parquet")
     file_2_name = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'nasapower', f"{var_names}_{int(closest_df.iloc[2]['loc_id'])}.parquet")
     file_3_name = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'nasapower', f"{var_names}_{int(closest_df.iloc[3]['loc_id'])}.parquet")
     
-    loc_0 = pl.read_parquet(file_0_name)*weights[0]
-    loc_1 = pl.read_parquet(file_1_name)*weights[1]
-    loc_2 = pl.read_parquet(file_2_name)*weights[2]
-    loc_3 = pl.read_parquet(file_3_name)*weights[3]
+    loc_0 = pl.read_parquet(file_0_name)
+    loc_1 = pl.read_parquet(file_1_name)
+    loc_2 = pl.read_parquet(file_2_name)
+    loc_3 = pl.read_parquet(file_3_name)
 
-    #df = pl.concat([loc_0, loc_1, loc_2, loc_3])
-    print(loc_0)
-    print(loc_1)
-    print(loc_2)
-    print(loc_3)
-    # then subset by start_date and end_date
-    # multiply each time series by its weight
-    # add them togeather to create a single time series and time
+    # subset by date range
+    
+    loc_0 = loc_0.with_columns([(pl.col(var_names)*weights[0])])
+    loc_1 = loc_1.with_columns([(pl.col(var_names)*weights[1])])
+    loc_2 = loc_2.with_columns([(pl.col(var_names)*weights[2])])
+    loc_3 = loc_3.with_columns([(pl.col(var_names)*weights[3])])
+
+    merged_df = loc_0.join(loc_1, on='time', how='inner', suffix='_loc1') \
+                 .join(loc_2, on='time', how='inner', suffix='_loc2') \
+                 .join(loc_3, on='time', how='inner', suffix='_loc3')
+                 
+    merged_df = merged_df.with_columns([
+        (pl.col('temperature_2m') + pl.col('temperature_2m_loc1') + pl.col('temperature_2m_loc2') + pl.col('temperature_2m_loc3')).alias('summed'), 
+    ])
+    merged_df = merged_df.select(['time','summed'])
+    merged_df.rename({"summed": var_names})
+
+    print(merged_df)
+
     # convert to json
     # pass out to user
     
