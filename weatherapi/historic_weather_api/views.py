@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
-from datetime import datetime
+from datetime import datetime, time
 import pandas as pd
 from django.conf import settings
 import os
@@ -39,7 +39,9 @@ def get_nasapower(request):
         return Response({"error": "var_name parameter is missing."}, status=400)
     try:
         start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+        start_datetime = datetime.combine(start_date, time(0,0))
         end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+        end_datetime = datetime.combine(end_date, time(23,0))
     except ValueError:
         return Response({"error": "Invalid date format. Dates must be in YYYY-MM-DD format."}, status=400)
     # Split the comma-separated var_name values into a list
@@ -58,9 +60,7 @@ def get_nasapower(request):
         return Response({"error": f"Invalid var_name(s): {', '.join(invalid_var_names)}"}, status=400)
     
     # Error checking around start and end date...
-    
-    # Create a response message including the location and var_names
-    message = f"This is a nasapower response for location: {lat},{lon} and the variable(s): {', '.join(var_names_list)} between {start_date} and {end_date}"
+
     coords_url = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_merra2.csv')
     coords_df = pd.read_csv(coords_url)
     
@@ -99,6 +99,7 @@ def get_nasapower(request):
     loc_3 = pl.read_parquet(file_3_name)
 
     # subset by date range
+    loc_0 = loc_0.filter((pl.col("time") >= start_datetime) & (pl.col('time') <= end_datetime))
     
     loc_0 = loc_0.with_columns([(pl.col(var_names)*weights[0])])
     loc_1 = loc_1.with_columns([(pl.col(var_names)*weights[1])])
@@ -113,11 +114,11 @@ def get_nasapower(request):
         (pl.col('temperature_2m') + pl.col('temperature_2m_loc1') + pl.col('temperature_2m_loc2') + pl.col('temperature_2m_loc3')).alias('summed'), 
     ])
     merged_df = merged_df.select(['time','summed'])
-    merged_df.rename({"summed": var_names})
+    merged_df = merged_df.rename({"summed": var_names})
 
     print(merged_df)
 
     # convert to json
     # pass out to user
-    
-    return Response({"message": message})
+    message = f"This is a nasapower response for location: {lat},{lon} and the variable(s): {', '.join(var_names_list)} between {start_datetime} and {end_datetime}"
+    return Response({"message": message, 'Data': merged_df.write_json(row_oriented=True)})
