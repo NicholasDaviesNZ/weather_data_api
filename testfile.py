@@ -13,8 +13,9 @@ var_name=','.join([str(elem) for elem in [
     ]])
 start_date="2001-01-01"
 end_date="2020-01-01"
+interp_mode = 'snap'
 
-url = f"http://127.0.0.1:8000/historic/nasapower/?format=json&lat={lat}&lon={lon}&var_name={var_name}&start_date={start_date}&end_date={end_date}"
+url = f"http://127.0.0.1:8000/historic/nasapower/?format=json&lat={lat}&lon={lon}&var_name={var_name}&start_date={start_date}&end_date={end_date}&interp_mode={interp_mode}"
 
 # Make a GET request to the API
 response = requests.get(url)

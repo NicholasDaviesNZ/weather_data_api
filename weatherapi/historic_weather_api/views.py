@@ -20,7 +20,8 @@ def calculate_distance(x1, y1, x2, y2):
     """returns the distance between two points, is used for getting the 4 closest locations to the point"""
     return np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
-def get_closest_points_and_weights(coords_url, lat, lon):
+# should add a snap IDW option into here to only return 1 or return 4
+def get_closest_points_and_weights(coords_url, lat, lon, interp_mode):
     """from the csv file which holds the coordinates and loc_ids for the dataset, coords_url
     get a new dataframe, closest_df with the 4 closest points, and the weight from the inverse distance to those points from 
     the user defined lat and long, retuns dataframe with the locations and the weights for the sum"""
@@ -29,76 +30,89 @@ def get_closest_points_and_weights(coords_url, lat, lon):
     coords_df['latitude'] = (coords_df['latitude']).astype(float)
     coords_df['longitude'] = (coords_df['longitude']).astype(float)
 
-    # for era5_land, we may have to do a check here and find the era5 proper value for points whcih fall outside of the era5-land dataset
-    # so try and load these, may need a try except statement, if load fails and era5_land, fall back to era5_proper and try again, if it still fails return error
-    p_lat = coords_df['latitude'][(coords_df['latitude'] - lat) >= 0].min()
-    p_lon = coords_df['longitude'][(coords_df['longitude'] - lon) >= 0].min()
-    n_lat = coords_df['latitude'][(coords_df['latitude'] - lat) < 0].max()
-    n_lon = coords_df['longitude'][(coords_df['longitude'] - lon) < 0].max()
+    if (interp_mode == 'IDW') or (interp_mode == 'idw'):
+        # for era5_land, we may have to do a check here and find the era5 proper value for points whcih fall outside of the era5-land dataset
+        # so try and load these, may need a try except statement, if load fails and era5_land, fall back to era5_proper and try again, if it still fails return error
+        p_lat = coords_df['latitude'][(coords_df['latitude'] - lat) >= 0].min()
+        p_lon = coords_df['longitude'][(coords_df['longitude'] - lon) >= 0].min()
+        n_lat = coords_df['latitude'][(coords_df['latitude'] - lat) < 0].max()
+        n_lon = coords_df['longitude'][(coords_df['longitude'] - lon) < 0].max()
 
-    points = [
-        (p_lat, n_lon),  
-        (p_lat, p_lon),  
-        (n_lat, n_lon),  
-        (n_lat, p_lon)   
-    ]
-    given_point = (lat, lon)
-    closest_df = pd.merge(pd.DataFrame(points, columns=['latitude', 'longitude']), coords_df, on=['latitude', 'longitude'], how='left')
+        points = [
+            (p_lat, n_lon),  
+            (p_lat, p_lon),  
+            (n_lat, n_lon),  
+            (n_lat, p_lon)   
+        ]
+        
+        closest_df = pd.merge(pd.DataFrame(points, columns=['latitude', 'longitude']), coords_df, on=['latitude', 'longitude'], how='left')
     
-    # we should put a check in somewhere to make sure the distance is reasonable, ie less than say 50km (or dataset specific) and if its not either retun an error
-    # or find the apprate era5 proper substitude and try again 
-    closest_df['distances'] = closest_df.apply(lambda row: calculate_distance(given_point[0], given_point[1], row['latitude'], row['longitude']), axis=1)
+        # we should put a check in somewhere to make sure the distance is reasonable, ie less than say 50km (or dataset specific) and if its not either retun an error
+        # or find the apprate era5 proper substitude and try again 
+        closest_df['distances'] = closest_df.apply(lambda row: calculate_distance(lat, lon, row['latitude'], row['longitude']), axis=1)
 
-    closest_df['weights'] = 1/closest_df['distances']
-    closest_df['weights'] = closest_df['weights']/closest_df['weights'].sum()
-    return(closest_df)
+        closest_df['weights'] = 1/closest_df['distances']
+        closest_df['weights'] = closest_df['weights']/closest_df['weights'].sum()
+        return(closest_df)
+    else:
+        p_lat = coords_df.loc[abs(coords_df['latitude'] - lat).idxmin(), 'latitude']
+        p_lon = coords_df.loc[abs(coords_df['longitude'] - lon).idxmin(), 'longitude']
+        closest_df = pd.merge(pd.DataFrame([(p_lat, p_lon)], columns=['latitude', 'longitude']), coords_df, on=['latitude', 'longitude'], how='left')
+        return(closest_df)
 
-
-def get_single_varable_df(dataset_name, var_name, closest_df, start_datetime, end_datetime):
+def get_single_varable_df(dataset_name, var_name, closest_df, start_datetime, end_datetime, interp_mode):
     """ for a given varable in the weather datastt var_name, load the values for the 4 closest locations
     filter them down to only include the user defined time range, merge them all to a single df, note that this is an inner merge,
     if one location is missing values, the time step will not be in the output. Finanly sum the weighted values (to get the IDW average)
     and reutrn a df which is only the time and the idw value. Note a polars dataframe is returned
     """
+    if (interp_mode == 'IDW') or (interp_mode == 'idw'):
+        file_0_name = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', f'{dataset_name}', f"{var_name}_{int(closest_df.iloc[0]['loc_id'])}.parquet")
+        file_1_name = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', f'{dataset_name}', f"{var_name}_{int(closest_df.iloc[1]['loc_id'])}.parquet")
+        file_2_name = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', f'{dataset_name}', f"{var_name}_{int(closest_df.iloc[2]['loc_id'])}.parquet")
+        file_3_name = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', f'{dataset_name}', f"{var_name}_{int(closest_df.iloc[3]['loc_id'])}.parquet")
     
-    file_0_name = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', f'{dataset_name}', f"{var_name}_{int(closest_df.iloc[0]['loc_id'])}.parquet")
-    file_1_name = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', f'{dataset_name}', f"{var_name}_{int(closest_df.iloc[1]['loc_id'])}.parquet")
-    file_2_name = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', f'{dataset_name}', f"{var_name}_{int(closest_df.iloc[2]['loc_id'])}.parquet")
-    file_3_name = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', f'{dataset_name}', f"{var_name}_{int(closest_df.iloc[3]['loc_id'])}.parquet")
-    
-    loc_0 = pl.read_parquet(file_0_name)
-    loc_1 = pl.read_parquet(file_1_name)
-    loc_2 = pl.read_parquet(file_2_name)
-    loc_3 = pl.read_parquet(file_3_name)
+        loc_0 = pl.read_parquet(file_0_name)
+        loc_1 = pl.read_parquet(file_1_name)
+        loc_2 = pl.read_parquet(file_2_name)
+        loc_3 = pl.read_parquet(file_3_name)
 
-    # subset by date range
-    loc_0 = loc_0.filter((pl.col("time") >= start_datetime) & (pl.col('time') <= end_datetime))
+        # subset by date range
+        loc_0 = loc_0.filter((pl.col("time") >= start_datetime) & (pl.col('time') <= end_datetime))
     
-    loc_0 = loc_0.with_columns([(pl.col(var_name)*closest_df.iloc[0]['weights'])])
-    loc_1 = loc_1.with_columns([(pl.col(var_name)*closest_df.iloc[1]['weights'])])
-    loc_2 = loc_2.with_columns([(pl.col(var_name)*closest_df.iloc[2]['weights'])])
-    loc_3 = loc_3.with_columns([(pl.col(var_name)*closest_df.iloc[3]['weights'])])
+        loc_0 = loc_0.with_columns([(pl.col(var_name)*closest_df.iloc[0]['weights'])])
+        loc_1 = loc_1.with_columns([(pl.col(var_name)*closest_df.iloc[1]['weights'])])
+        loc_2 = loc_2.with_columns([(pl.col(var_name)*closest_df.iloc[2]['weights'])])
+        loc_3 = loc_3.with_columns([(pl.col(var_name)*closest_df.iloc[3]['weights'])])
 
-    merged_df = loc_0.join(loc_1, on='time', how='inner', suffix='_loc1') \
+        merged_df = loc_0.join(loc_1, on='time', how='inner', suffix='_loc1') \
                  .join(loc_2, on='time', how='inner', suffix='_loc2') \
                  .join(loc_3, on='time', how='inner', suffix='_loc3')
                  
-    merged_df = merged_df.with_columns([
-        (pl.col(var_name) + pl.col(f'{var_name}_loc1') + pl.col(f'{var_name}_loc2') + pl.col(f'{var_name}_loc3')).alias('summed'), 
-    ])
-    merged_df = merged_df.select(['time','summed'])
-    merged_df = merged_df.rename({"summed": var_name})
+        merged_df = merged_df.with_columns([
+            (pl.col(var_name) + pl.col(f'{var_name}_loc1') + pl.col(f'{var_name}_loc2') + pl.col(f'{var_name}_loc3')).alias('summed'), 
+        ])
+        merged_df = merged_df.select(['time','summed'])
+        merged_df = merged_df.rename({"summed": var_name})
     
-    return(merged_df)
+        return(merged_df)
+    else:
+        file_name = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', f'{dataset_name}', f"{var_name}_{int(closest_df.iloc[0]['loc_id'])}.parquet")
+        loc_0 = pl.read_parquet(file_name)
+        loc_0 = loc_0.filter((pl.col("time") >= start_datetime) & (pl.col('time') <= end_datetime))
+        return(loc_0)
 
-def build_multi_var_df(var_names_list, dataset_name, closest_df, start_datetime, end_datetime):
+        
+        
+        
+def build_multi_var_df(var_names_list, dataset_name, closest_df, start_datetime, end_datetime, interp_mode):
     """ caller to get_single_varable_df for when there is multiple values, returns a polars dataframe
     which containes the timestamp and the values for each varable in a single df. Note that if a single varable
     is missing values, those timestamps will not be returned for any varables. 
     """
     cc = 0
     for var_name in var_names_list:
-        df = get_single_varable_df(dataset_name, var_name, closest_df, start_datetime, end_datetime)
+        df = get_single_varable_df(dataset_name, var_name, closest_df, start_datetime, end_datetime, interp_mode)
         if cc == 0:
             merged_df = df
         else:
@@ -115,6 +129,9 @@ def run_standard_input_checks(request, valid_var_names):
     var_names = request.query_params.get('var_name', None)
     start_date_str = request.query_params.get('start_date', None)
     end_date_str = request.query_params.get('end_date', None)
+    interp_mode = request.query_params.get('interp_mode', None)
+    if interp_mode.lower() != 'snap':
+        interp_mode = 'IDW'
     
     if lat is None or lon is None:
         return Response({"error": "lat or lon parameter is missing."}, status=400)
@@ -133,7 +150,7 @@ def run_standard_input_checks(request, valid_var_names):
     invalid_var_names = [var_name for var_name in var_names_list if var_name not in valid_var_names]
     if invalid_var_names:
         return Response({"error": f"Invalid var_name(s): {', '.join(invalid_var_names)}"}, status=400)
-    return lat, lon, var_names_list, start_datetime, end_datetime
+    return lat, lon, var_names_list, start_datetime, end_datetime, interp_mode
 
 @api_view(['GET'])
 def get_nasapower(request):
@@ -156,18 +173,18 @@ def get_nasapower(request):
         return input_check_response
     
     # if the input was valid unpack the valid inputs to their required varable names
-    lat, lon, var_names_list, start_datetime, end_datetime = input_check_response
+    lat, lon, var_names_list, start_datetime, end_datetime, interp_mode = input_check_response
     
     # the url to the coordinates file for this dataset - holds the lat, long and loc_id values for this dataset
     coords_url = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_merra2.csv')
     # calls a function which gets the closest 4 locations to the users lat and long point, calculates the IDW for each 
     # of those points and reutns the lcoations and weights in a pandas df, closest_df
-    closest_df = get_closest_points_and_weights(coords_url, lat, lon)
+    closest_df = get_closest_points_and_weights(coords_url, lat, lon, interp_mode)
     # Given the 4 closest points and their weights, for every varable the user input, trim to the users date range and
     # merge into a single polars dataframe for retun to the user
-    merged_df = build_multi_var_df(var_names_list, dataset_name, closest_df, start_datetime, end_datetime)
+    merged_df = build_multi_var_df(var_names_list, dataset_name, closest_df, start_datetime, end_datetime, interp_mode)
     # convert to json to pass it out
     data_json = merged_df.write_json(row_oriented=True)
     # a message for the user to check what they ahve done, is what they wanted to do
-    message = f"This is a nasapower response for location: {lat},{lon} and the variable(s): {', '.join(var_names_list)} between {start_datetime} and {end_datetime}"
+    message = f"This is a nasapower response for location: {lat},{lon} and the variable(s): {', '.join(var_names_list)} between {start_datetime} and {end_datetime} using mode {interp_mode}"
     return Response({"message": message, 'Data': data_json})
