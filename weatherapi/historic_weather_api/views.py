@@ -9,9 +9,7 @@ from django.templatetags.static import static
 from scipy.spatial.distance import cdist
 import numpy as np
 import polars as pl
-import re
 
-# Create your views here.
 @api_view(['GET'])
 def test(request):
     """test function just for the user to check that the api is up"""
@@ -31,6 +29,8 @@ def get_closest_points_and_weights(coords_url, lat, lon):
     coords_df['latitude'] = (coords_df['latitude']).astype(float)
     coords_df['longitude'] = (coords_df['longitude']).astype(float)
 
+    # for era5_land, we may have to do a check here and find the era5 proper value for points whcih fall outside of the era5-land dataset
+    # so try and load these, may need a try except statement, if load fails and era5_land, fall back to era5_proper and try again, if it still fails return error
     p_lat = coords_df['latitude'][(coords_df['latitude'] - lat) >= 0].min()
     p_lon = coords_df['longitude'][(coords_df['longitude'] - lon) >= 0].min()
     n_lat = coords_df['latitude'][(coords_df['latitude'] - lat) < 0].max()
@@ -45,7 +45,8 @@ def get_closest_points_and_weights(coords_url, lat, lon):
     given_point = (lat, lon)
     closest_df = pd.merge(pd.DataFrame(points, columns=['latitude', 'longitude']), coords_df, on=['latitude', 'longitude'], how='left')
     
-
+    # we should put a check in somewhere to make sure the distance is reasonable, ie less than say 50km (or dataset specific) and if its not either retun an error
+    # or find the apprate era5 proper substitude and try again 
     closest_df['distances'] = closest_df.apply(lambda row: calculate_distance(given_point[0], given_point[1], row['latitude'], row['longitude']), axis=1)
 
     closest_df['weights'] = 1/closest_df['distances']
