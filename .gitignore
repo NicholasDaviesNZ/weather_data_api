@@ -1,2 +1,4 @@
 *.parquet
 *.ipynb_checkpoints
+*.nc
+*.netcdf.zip

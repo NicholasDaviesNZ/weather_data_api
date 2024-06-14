@@ -13,24 +13,35 @@ from scipy.spatial import cKDTree
 import time as timer
 from concurrent.futures import ThreadPoolExecutor
 
+coords_df_np = pd.read_csv(os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_merra2.csv'))
+tree_np = cKDTree(coords_df_np[['latitude', 'longitude']])
+
+coords_df_era5 = pd.read_csv(os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_era5_proper.csv'))
+tree_era5 = cKDTree(coords_df_era5[['latitude', 'longitude']])
+
+coords_df_era5_land = pd.read_csv(os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_era5_land.csv'))
+tree_era5_land = cKDTree(coords_df_era5_land[['latitude', 'longitude']])
+
+coords_df_fenz = pd.read_csv(os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_FENZ.csv'))
+tree_fenz = cKDTree(coords_df_fenz[['latitude', 'longitude']])
+
+
 
 def calculate_distance(x1, y1, x2, y2):
     """returns the distance between two points, is used for getting the 4 closest locations to the point"""
     return np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
 # should add a snap IDW option into here to only return 1 or return 4
-def get_closest_points_and_weights(coords_url, lat, lon, interp_mode):
+def get_closest_points_and_weights(coords_df, tree, lat, lon):
     """from the csv file which holds the coordinates and loc_ids for the dataset, coords_url
     get a new dataframe, closest_df with the 4 closest points, and the weight from the inverse distance to those points from 
     the user defined lat and long, retuns dataframe with the locations and the weights for the sum"""
-    coords_df = pd.read_csv(coords_url)
     
-    coords_df['latitude'] = (coords_df['latitude']).astype(float)
-    coords_df['longitude'] = (coords_df['longitude']).astype(float)
-    coords_df['loc_id'] = (coords_df['loc_id']).astype(int)
+    # coords_df['latitude'] = (coords_df['latitude']).astype(float)
+    # coords_df['longitude'] = (coords_df['longitude']).astype(float)
+    # coords_df['loc_id'] = (coords_df['loc_id']).astype(int)
 
     # this is a sort tree from scipy spectral to get make finding the distance from the users point to the nearest locations in the coords file
-    tree = cKDTree(coords_df[['latitude', 'longitude']])
     dist, indices = tree.query([(lat, lon)], k=len(coords_df), workers=-1)
     dist = dist.flatten()
     closest_df = coords_df.iloc[indices.flatten()]
@@ -41,6 +52,7 @@ def get_closest_points_and_weights(coords_url, lat, lon, interp_mode):
 
 def process_file(file_name, start_datetime,end_datetime):
     df = pl.read_parquet(file_name).select(pl.all().exclude("^__index_level_.*$"))
+    df = df.with_columns(pl.col('time').dt.cast_time_unit('ns'))
     df = df.filter((pl.col("time") >= start_datetime) & (pl.col('time') <= end_datetime))
     return df
 
@@ -87,11 +99,11 @@ def get_single_variable_df(data_source, var_name, closest_df, start_datetime, en
         results[i] = df.with_columns([(pl.col(var_name) * weight).alias(var_name)])
 
     merged_df = results[0]
-    print(merged_df)
+
     for i, df in enumerate(results[1:], start=1):
         # Join and sum the weighted var_name columns
         merged_df = merged_df.join(df, on='time', how='inner')
-        print(merged_df)
+
         merged_df = merged_df.with_columns([(pl.col(var_name) + pl.col(f'{var_name}_right')).alias(var_name)])
         
         merged_df = merged_df.drop(f"{var_name}_right")
@@ -147,7 +159,7 @@ def run_standard_input_checks(request):
             ]
     elif data_source == 'era5':
         valid_var_names = [
-            '10m_u_component_of_wind', '10m_v_component_of_wind','2m_dewpoint_temperature','temperature_2m','soil_temperature_level_1', 'soil_temperature_level_2', 'soil_temperature_level_3',
+            '10m_u_component_of_wind', '10m_v_component_of_wind','dewpoint_temperature_2m','temperature_2m','soil_temperature_level_1', 'soil_temperature_level_2', 'soil_temperature_level_3',
             'runoff','soil_temperature_level_1', 'soil_temperature_level_2', 'soil_temperature_level_3','sub_surface_runoff', 'surface_runoff','surface_pressure','total_precipitation',
             'volumetric_soil_water_layer_1', 'volumetric_soil_water_layer_2', 'volumetric_soil_water_layer_3', 'cloud_base_height','evaporation','high_cloud_cover','medium_cloud_cover',
             'low_cloud_cover','potential_evaporation','snow_depth','snowfall','soil_type','total_cloud_cover'
@@ -159,7 +171,7 @@ def run_standard_input_checks(request):
             'soil_temperature_level_1', 'soil_temperature_level_2', 'soil_temperature_level_3',
             'sub_surface_runoff', 'surface_runoff', 'total_evaporation',
             'volumetric_soil_water_layer_1', 'volumetric_soil_water_layer_2', 'volumetric_soil_water_layer_3', 
-            '10m_u_component_of_wind', '10m_v_component_of_wind', '2m_dewpoint_temperature',
+            '10m_u_component_of_wind', '10m_v_component_of_wind', 'dewpoint_temperature_2m',
             'temperature_2m', 'snow_depth', 'snowfall',
             'surface_pressure', 'total_precipitation'
             ]
@@ -195,13 +207,10 @@ def run_standard_input_checks(request):
     return data_source, lat, lon, var_names_list, start_datetime, end_datetime, interp_mode
 
 
-def get_nasapower(lat, lon, interp_mode, var_names_list, data_source, start_datetime, end_datetime):
-    # the url to the coordinates file for this dataset - holds the lat, long and loc_id values for this dataset
-    coords_url = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_merra2.csv')
-    
+def get_nasapower(lat, lon, interp_mode, var_names_list, data_source, start_datetime, end_datetime):    
     # calls a function which gets the closest 4 locations to the users lat and long point, calculates the IDW for each 
     # of those points and reutns the lcoations and weights in a pandas df, closest_df
-    closest_df = get_closest_points_and_weights(coords_url, lat, lon, interp_mode)
+    closest_df = get_closest_points_and_weights(coords_df_np, tree_np, lat, lon)
    
     # Given the 4 closest points and their weights, for every variable the user input, trim to the users date range and
     # merge into a single polars dataframe for retun to the user
@@ -209,20 +218,18 @@ def get_nasapower(lat, lon, interp_mode, var_names_list, data_source, start_date
     return(merged_df)
 
 def get_era5(lat, lon, interp_mode, var_names_list, data_source, start_datetime, end_datetime):
-    coords_url = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_era5_proper.csv')
-    closest_df = get_closest_points_and_weights(coords_url, lat, lon, interp_mode)
+    closest_df = get_closest_points_and_weights(coords_df_era5, tree_era5, lat, lon)
     merged_df = build_multi_var_df(var_names_list, data_source, closest_df, start_datetime, end_datetime, interp_mode)
     return(merged_df)
 
 def get_era5_land(lat, lon, interp_mode, var_names_list, data_source, start_datetime, end_datetime):
     coords_url = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_era5_land.csv')
-    closest_df = get_closest_points_and_weights(coords_url, lat, lon, interp_mode)
+    closest_df = get_closest_points_and_weights(coords_df_era5_land, tree_era5_land, lat, lon)
     merged_df = build_multi_var_df(var_names_list, data_source, closest_df, start_datetime, end_datetime, interp_mode)
     return(merged_df)
 
 def get_fenz(lat, lon, interp_mode, var_names_list, data_source, start_datetime, end_datetime):
-    coords_url = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_FENZ.csv')
-    closest_df = get_closest_points_and_weights(coords_url, lat, lon, interp_mode)
+    closest_df = get_closest_points_and_weights(coords_df_fenz, tree_fenz, lat, lon)
     merged_df = build_multi_var_df(var_names_list, data_source, closest_df, start_datetime, end_datetime, interp_mode)
     return(merged_df)
 
