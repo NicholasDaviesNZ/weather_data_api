@@ -32,30 +32,22 @@ lon = 172
 
 #era5_land test - need fixing evaporation_from_bare_soil, evaporation_from_open_water_surfaces_excluding_oceans, evaporation_from_the_top_of_canopy, evaporation_from_vegetation_transpiration, total_evaporation, 2m_temperature
 #and need to remove loc_id from file write
-#data_source = 'era5_land'
-#var_name=','.join([str(elem) for elem in [
-#             'potential_evaporation', 'runoff',
-#             'soil_temperature_level_1', 'soil_temperature_level_2', 'soil_temperature_level_3',
-#             'sub_surface_runoff', 'surface_runoff', 
-#             'volumetric_soil_water_layer_1', 'volumetric_soil_water_layer_2', 'volumetric_soil_water_layer_3', 
-#             '10m_u_component_of_wind', '10m_v_component_of_wind', 'dewpoint_temperature_2m',
-#              'snow_depth', 'snowfall',
-#             'surface_pressure', 'total_precipitation'
-#       ]])
 data_source = 'era5_land'
 var_name=','.join([str(elem) for elem in [
-            'evaporation_from_bare_soil',
-            'evaporation_from_open_water_surfaces_excluding_oceans',
-            'evaporation_from_the_top_of_canopy',
-            'evaporation_from_vegetation_transpiration',
-            'potential_evaporation','runoff','soil_temperature_level_1',
-            'soil_temperature_level_2','soil_temperature_level_3',
-            'sub_surface_runoff','surface_runoff','total_evaporation',
-      ]])
+            'evaporation_from_bare_soil', 'evaporation_from_open_water_surfaces_excluding_oceans', 'evaporation_from_the_top_of_canopy',
+            'evaporation_from_vegetation_transpiration', 'potential_evaporation', 'runoff',
+            'soil_temperature_level_1', 'soil_temperature_level_2', 'soil_temperature_level_3',
+            'sub_surface_runoff', 'surface_runoff', 'total_evaporation',
+            'volumetric_soil_water_layer_1', 'volumetric_soil_water_layer_2', 'volumetric_soil_water_layer_3', 
+            '10m_u_component_of_wind', '10m_v_component_of_wind', 'dewpoint_temperature_2m',
+            'temperature_2m', 'snow_depth', 'snowfall',
+            'surface_pressure', 'precipitation'
+            ]])
 
 
 
-#var_name = 'soil_temperature_level_1'#'soil_temperature_level_1'
+
+#var_name = 'temperature_2m'
 start_date="2021-06-01"
 end_date="2022-05-31"
 interp_mode = 'idw'

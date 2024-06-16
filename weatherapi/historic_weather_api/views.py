@@ -53,6 +53,7 @@ def get_closest_points_and_weights(coords_df, tree, lat, lon):
 def process_file(file_name, start_datetime,end_datetime):
     df = pl.read_parquet(file_name).select(pl.all().exclude("^__index_level_.*$"))
     df = df.with_columns(pl.col('time').dt.cast_time_unit('ns'))
+    
     df = df.filter((pl.col("time") >= start_datetime) & (pl.col('time') <= end_datetime))
     return df
 
@@ -62,7 +63,8 @@ def get_single_variable_df(data_source, var_name, closest_df, start_datetime, en
     if one location is missing values, the time step will not be in the output. Finanly sum the weighted values (to get the IDW average)
     and reutrn a df which is only the time and the idw value. Note a polars dataframe is returned
     """
-   
+    print(data_source)
+    print(var_name)
     rows_to_remove = []
     for index, row in closest_df.iterrows():
         if not os.path.exists(os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', f'{data_source}', f"{var_name}_{int(row['loc_id'])}.parquet")):
@@ -173,7 +175,7 @@ def run_standard_input_checks(request):
             'volumetric_soil_water_layer_1', 'volumetric_soil_water_layer_2', 'volumetric_soil_water_layer_3', 
             '10m_u_component_of_wind', '10m_v_component_of_wind', 'dewpoint_temperature_2m',
             'temperature_2m', 'snow_depth', 'snowfall',
-            'surface_pressure', 'total_precipitation'
+            'surface_pressure', 'precipitation'
             ]
     elif data_source == 'fenz':
         valid_var_names = [
@@ -223,9 +225,9 @@ def get_era5(lat, lon, interp_mode, var_names_list, data_source, start_datetime,
     return(merged_df)
 
 def get_era5_land(lat, lon, interp_mode, var_names_list, data_source, start_datetime, end_datetime):
-    coords_url = os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_era5_land.csv')
     closest_df = get_closest_points_and_weights(coords_df_era5_land, tree_era5_land, lat, lon)
     merged_df = build_multi_var_df(var_names_list, data_source, closest_df, start_datetime, end_datetime, interp_mode)
+    print(merged_df)
     return(merged_df)
 
 def get_fenz(lat, lon, interp_mode, var_names_list, data_source, start_datetime, end_datetime):
