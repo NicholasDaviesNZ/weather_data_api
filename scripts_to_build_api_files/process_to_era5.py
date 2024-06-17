@@ -9,7 +9,8 @@ import warnings
 from tqdm import tqdm
 
 netcdf4_folder = './era5_raw/'
-output_dir = './era5_parquet/'
+output_dir = './era5_parquet/' # note this will place the files in a subdircoty here, you will then have to manually copy them to the static dir in the api, or you could write them directly if you feel like living on the wild side
+
 locs_df = pd.read_csv('nz_coords_era5_proper.csv')
 
 

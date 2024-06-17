@@ -4,8 +4,7 @@ Script to take the raw fenz data, create a coords file from the raw data, and th
 
 
 fenz_dir = './FENZ_raw/' # raw data
-FENZ_parquet = './FENZ_parquet/' # processed parquet files dir 
-
+FENZ_parquet = './FENZ_parquet/' # note this will place the files in a subdircoty here, you will then have to manually copy them to the static dir in the api, or you could write them directly if you feel like living on the wild side
 
 import os
 from tqdm.notebook import tqdm

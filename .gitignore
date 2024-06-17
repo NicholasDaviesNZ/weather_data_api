@@ -3,3 +3,4 @@
 *.nc
 *.netcdf.zip
 *.h5
+.env

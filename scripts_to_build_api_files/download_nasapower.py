@@ -2,11 +2,10 @@
 Script to download the raw data from the nasapower api
 """
 
-start_date = "2001-01-01"
-end_date = "2023-12-31"
+start_date = "2024-01-01"
+end_date = "2024-12-31"
 
-nasapower_coords = pd.read_csv('nz_coords_merra2.csv') # note that this was manaully created
-nasapower_dir = './nasapower_raw/'
+nasapower_dir = './scripts_to_build_api_files/nasapower_raw/'
 
 
 import pandas as pd
@@ -15,6 +14,8 @@ import os
 import requests
 import json
 from tqdm import tqdm
+
+nasapower_coords = pd.read_csv('./scripts_to_build_api_files/nz_coords_merra2.csv') # note that this was manaully created
 
 if not os.path.exists(nasapower_dir):
     os.makedirs(nasapower_dir)

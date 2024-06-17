@@ -1,9 +1,10 @@
 
 
+
 era5_land_dir = './era5_land_raw/'
 
-start_year = 2001
-end_year = 2023
+start_year = 2023
+end_year = 2024
 
 
 import cdsapi
@@ -11,12 +12,13 @@ import itertools
 from concurrent.futures import ThreadPoolExecutor
 import os
 import cfgrib as cfgrib
-
+from dotenv import load_dotenv
+load_dotenv() # load the env variables from the .env file, needs to have CDSAPI_URL and CDSAPI_KEY from your cds store account
 
 yearly_list = [str(year) for year in range(start_year, end_year + 1)]
 monthly_list = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
 al = [-33.3, 164.64, -47.24, 179.53]
-num_threads = 19
+num_threads = 19 # 20 is the max simultainius connections to cds for era5_land, but they may reduce it if its bussy or they decide you are making too many connections
 
 if not os.path.exists(era5_land_dir):
     os.makedirs(era5_land_dir)
@@ -29,8 +31,6 @@ var_to_collect = ['evaporation_from_bare_soil', 'evaporation_from_open_water_sur
             '10m_u_component_of_wind', '10m_v_component_of_wind', '2m_dewpoint_temperature',
             '2m_temperature', 'snow_depth', 'snowfall',
             'surface_pressure', 'total_precipitation']
-
-
 
 
 # https://cds.climate.copernicus.eu/cdsapp#!/dataset/reanalysis-era5-land?tab=overview

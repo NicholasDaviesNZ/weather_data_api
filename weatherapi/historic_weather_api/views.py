@@ -25,11 +25,29 @@ tree_era5_land = cKDTree(coords_df_era5_land[['latitude', 'longitude']])
 coords_df_fenz = pd.read_csv(os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_FENZ.csv'))
 tree_fenz = cKDTree(coords_df_fenz[['latitude', 'longitude']])
 
+def get_date_ranges_on_start(data_source):
+    hist_file_name = os.path.join(settings.BASE_DIR,'historic_weather_api','static', 'historic', f'{data_source}',"temperature_2m_0.parquet")
+    hist_df = pd.read_parquet(hist_file_name)['time']
+    dates_dict = {
+        'hist_min':min(hist_df),
+        'hist_max':max(hist_df),
+    }
+    
+    cur_file_name = os.path.join(settings.BASE_DIR,'historic_weather_api','static', 'current', f'{data_source}',"temperature_2m_0.parquet")
+    if os.path.exists(cur_file_name):
+        cur_df = pd.read_parquet(cur_file_name)['time']
+    
+        dates_dict['cur_min'] = min(cur_df)
+        dates_dict['cur_max'] = max(cur_df)
 
-
-def calculate_distance(x1, y1, x2, y2):
-    """returns the distance between two points, is used for getting the 4 closest locations to the point"""
-    return np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+    return(dates_dict)
+    
+minmax_dates = {
+    'nasapower':get_date_ranges_on_start('nasapower'),
+    'era5':get_date_ranges_on_start('era5'),
+    'era5_land':get_date_ranges_on_start('era5_land'),
+    'fenz':get_date_ranges_on_start('fenz'),
+    }
 
 # should add a snap IDW option into here to only return 1 or return 4
 def get_closest_points_and_weights(coords_df, tree, lat, lon):
@@ -63,11 +81,10 @@ def get_single_variable_df(data_source, var_name, closest_df, start_datetime, en
     if one location is missing values, the time step will not be in the output. Finanly sum the weighted values (to get the IDW average)
     and reutrn a df which is only the time and the idw value. Note a polars dataframe is returned
     """
-    print(data_source)
-    print(var_name)
+
     rows_to_remove = []
     for index, row in closest_df.iterrows():
-        if not os.path.exists(os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', f'{data_source}', f"{var_name}_{int(row['loc_id'])}.parquet")):
+        if not os.path.exists(os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'historic', f'{data_source}', f"{var_name}_{int(row['loc_id'])}.parquet")):
             rows_to_remove.append(index)
             
             
@@ -81,36 +98,69 @@ def get_single_variable_df(data_source, var_name, closest_df, start_datetime, en
     else:
         closest_df = closest_df.head(1)
         closest_df.insert(len(closest_df.columns), 'weights', 1) 
+    
+    file_names_hist = []
+    file_names_cur = []
+    if (minmax_dates[data_source].get('hist_max') is not None) and (start_datetime <= minmax_dates[data_source].get('hist_max')):
+        for i in range(len(closest_df)):
+            file_name = os.path.join(settings.BASE_DIR,'historic_weather_api','static', 'historic', f'{data_source}',f"{var_name}_{int(closest_df.iloc[i]['loc_id'])}.parquet")
+            file_names_hist.append(file_name)
+        if (minmax_dates[data_source].get('cur_min') is not None) and (end_datetime >= minmax_dates[data_source].get('cur_min')):
+            for i in range(len(closest_df)):
+                file_name = os.path.join(settings.BASE_DIR,'historic_weather_api','static', 'current', f'{data_source}',f"{var_name}_{int(closest_df.iloc[i]['loc_id'])}.parquet")
+                file_names_cur.append(file_name)
+    elif (minmax_dates[data_source].get('cur_min') is not None) and (start_datetime >= minmax_dates[data_source].get('cur_min')):
+        for i in range(len(closest_df)):
+            file_name = os.path.join(settings.BASE_DIR,'historic_weather_api','static', 'current', f'{data_source}',f"{var_name}_{int(closest_df.iloc[i]['loc_id'])}.parquet")
+            file_names_cur.append(file_name)
         
-    file_names = []
-    for i in range(len(closest_df)):
-        file_name = os.path.join(settings.BASE_DIR,'historic_weather_api','static',f'{data_source}',f"{var_name}_{int(closest_df.iloc[i]['loc_id'])}.parquet")
-        file_names.append(file_name)
-        
+
     # if there are no files that can be loaded, return an empty dataframe to the calling function
-    if len(file_names) < 1:
+    if not file_names_hist and not file_names_cur:
         return(pl.DataFrame(schema={'time': pl.Datetime, var_name: pl.Float64}))
     
     
-    with ThreadPoolExecutor() as executor:
-        futures = [executor.submit(process_file, file_name, start_datetime, end_datetime) for i, file_name in enumerate(file_names)]
-        results = [future.result() for future in futures]
+    # if there are no files that can be loaded, return an empty dataframe to the calling function
+    if file_names_hist:
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(process_file, file_name, start_datetime, end_datetime) for i, file_name in enumerate(file_names_hist)]
+            results_hist = [future.result() for future in futures]
 
-    for i, df in enumerate(results):
-        weight = closest_df.iloc[i]['weights']
-        results[i] = df.with_columns([(pl.col(var_name) * weight).alias(var_name)])
+        for i, df in enumerate(results_hist):
+            weight = closest_df.iloc[i]['weights']
+            results_hist[i] = df.with_columns([(pl.col(var_name) * weight).alias(var_name)])
 
-    merged_df = results[0]
-
-    for i, df in enumerate(results[1:], start=1):
-        # Join and sum the weighted var_name columns
-        merged_df = merged_df.join(df, on='time', how='inner')
-
-        merged_df = merged_df.with_columns([(pl.col(var_name) + pl.col(f'{var_name}_right')).alias(var_name)])
+        merged_hist_df = results_hist[0]
         
-        merged_df = merged_df.drop(f"{var_name}_right")
+        for i, df in enumerate(results_hist[1:], start=1):
+            # Join and sum the weighted var_name columns
+            merged_hist_df = merged_hist_df.join(df, on='time', how='inner')
+            merged_hist_df = merged_hist_df.with_columns([(pl.col(var_name) + pl.col(f'{var_name}_right')).alias(var_name)])
+            merged_hist_df = merged_hist_df.drop(f"{var_name}_right")
+        if not file_names_cur:
+            return(merged_hist_df)
         
-    
+    if file_names_cur:
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(process_file, file_name, start_datetime, end_datetime) for i, file_name in enumerate(file_names_cur)]
+            results_cur = [future.result() for future in futures]
+
+        for i, df in enumerate(results_cur):
+            weight = closest_df.iloc[i]['weights']
+            results_cur[i] = df.with_columns([(pl.col(var_name) * weight).alias(var_name)])
+
+        merged_cur_df = results_cur[0]
+
+        for i, df in enumerate(results_cur[1:], start=1):
+            # Join and sum the weighted var_name columns
+            merged_cur_df = merged_cur_df.join(df, on='time', how='inner')
+            merged_cur_df = merged_cur_df.with_columns([(pl.col(var_name) + pl.col(f'{var_name}_right')).alias(var_name)])
+            merged_cur_df = merged_cur_df.drop(f"{var_name}_right")
+        if not file_names_hist:
+            return(merged_cur_df)
+            
+    merged_df = pl.concat([merged_hist_df, merged_cur_df], how="vertical")
+    merged_df = merged_df.unique()
     return(merged_df)
         
 def build_multi_var_df(var_names_list, data_source, closest_df, start_datetime, end_datetime, interp_mode):
@@ -121,11 +171,13 @@ def build_multi_var_df(var_names_list, data_source, closest_df, start_datetime, 
     cc = 0
     for var_name in var_names_list:
         df = get_single_variable_df(data_source, var_name, closest_df, start_datetime, end_datetime, interp_mode)
+
         if cc == 0:
             merged_df = df
         else:
             merged_df = merged_df.join(df, on='time', how='inner')
         cc +=1
+        
     return(merged_df)
 
 def run_standard_input_checks(request):
@@ -208,7 +260,6 @@ def run_standard_input_checks(request):
 
     return data_source, lat, lon, var_names_list, start_datetime, end_datetime, interp_mode
 
-
 def get_nasapower(lat, lon, interp_mode, var_names_list, data_source, start_datetime, end_datetime):    
     # calls a function which gets the closest 4 locations to the users lat and long point, calculates the IDW for each 
     # of those points and reutns the lcoations and weights in a pandas df, closest_df
@@ -234,7 +285,7 @@ def get_fenz(lat, lon, interp_mode, var_names_list, data_source, start_datetime,
     closest_df = get_closest_points_and_weights(coords_df_fenz, tree_fenz, lat, lon)
     merged_df = build_multi_var_df(var_names_list, data_source, closest_df, start_datetime, end_datetime, interp_mode)
     return(merged_df)
-
+    
 
 @api_view(['GET'])
 def test(request):

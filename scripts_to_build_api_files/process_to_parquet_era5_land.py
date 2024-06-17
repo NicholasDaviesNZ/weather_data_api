@@ -4,10 +4,9 @@ Process era5_land raw data into varaible location parquet files
 
 
 
-netcdf4_folder = './era5_land_raw/'
-output_dir = './era5_land_parquet/'
+netcdf4_folder = './era5_land_raw/' 
+output_dir = './era5_land_parquet/' # note this will place the files in a subdircoty here, you will then have to manually copy them to the static dir in the api, or you could write them directly if you feel like living on the wild side
 
-import xarray as xr
 import zipfile
 import os
 import pandas as pd
