@@ -142,7 +142,7 @@ not_files_indexes = [index for index, item in enumerate(result_list) if item not
 #get only the missing combos
 requested_combinations = [all_combinations[index] for index in not_files_indexes]
 
-num_threads = 9
+num_threads = 19
 all_results = []
 
 

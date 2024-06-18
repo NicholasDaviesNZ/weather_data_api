@@ -171,7 +171,6 @@ def build_multi_var_df(var_names_list, data_source, closest_df, start_datetime, 
     cc = 0
     for var_name in var_names_list:
         df = get_single_variable_df(data_source, var_name, closest_df, start_datetime, end_datetime, interp_mode)
-
         if cc == 0:
             merged_df = df
         else:
@@ -252,7 +251,7 @@ def run_standard_input_checks(request):
         end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
         end_datetime = datetime.combine(end_date, time(23,0))
     except ValueError:
-        return Response({"error": "Invalid date format. Dates must be in YYYY-MM-DD format."}, status=400)
+        return Response({"error": "Invalid date format. Dates must be in YYYY-MM-DD format. Check your date formatting and that you are not requesting a date which does not exist (eg 31st in a month with 30 days)"}, status=400)
     
     interp_mode = request.query_params.get('interp_mode', None)
     if interp_mode is None or interp_mode.lower() != 'snap':
@@ -326,7 +325,9 @@ def get_data(request):
         return merged_df
 
     if merged_df.is_empty():
-        return Response({"error": "the data_source exists, but there are no nearby values for your varables within your date range, try reducing the varables requested or increasing the date range"}, status=400)
+        return Response({"error": "the data_source exists, but there are no or not enough nearby values for your varables within your date range, try using snap, reducing the varables requested or increasing the date range"}, status=400)
+    
+    merged_df = merged_df.sort("time")
     # convert to json to pass it out
     data_json = merged_df.write_json(row_oriented=True)
 
