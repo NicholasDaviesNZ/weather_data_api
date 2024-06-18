@@ -7,7 +7,7 @@
     "mounts": [
         "source=/mnt/weather_api_data/,target=/workspaces/weather_data_api/weatherapi/historic_weather_api/static/,type=bind,consistency=cached"
     ],
-	"postCreateCommand": "pip install --user -r /workspaces/weather_data_api/requirements.txt",
+	"postCreateCommand": "pip install --user -r /workspaces/weather_data_api/requirements.txt"
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},
