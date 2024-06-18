@@ -19,3 +19,7 @@ wheel==0.43.0
 requests
 pyarrow
 fastparquet
+tethysts
+tqdm
+cdsapi
+python-dotenv
