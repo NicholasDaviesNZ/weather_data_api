@@ -2,10 +2,7 @@
 Script to download the raw data from the nasapower api
 """
 
-start_date = "2024-01-01"
-end_date = "2024-12-31"
 
-nasapower_dir = './scripts_to_build_api_files/nasapower_raw/'
 
 
 import pandas as pd
@@ -14,11 +11,9 @@ import os
 import requests
 import json
 from tqdm import tqdm
+from datetime import datetime, timedelta
 
-nasapower_coords = pd.read_csv('./scripts_to_build_api_files/nz_coords_merra2.csv') # note that this was manaully created
 
-if not os.path.exists(nasapower_dir):
-    os.makedirs(nasapower_dir)
 
 # downcast util to make df smaller before saving:
 def squeeze_dataframe(df):
@@ -86,7 +81,14 @@ def create_full_nasapower_df(latitude,longitude,start_date,end_date):
     return(final_df)
 
 
+start_date = "2024-01-01"
+end_date = datetime.now()
 
+nasapower_dir = './scripts_to_build_api_files/nasapower_raw/'
+nasapower_coords = pd.read_csv('./scripts_to_build_api_files/nz_coords_merra2.csv') # note that this was manaully created
+
+if not os.path.exists(nasapower_dir):
+    os.makedirs(nasapower_dir)
 
 # nasapower data download loop
 for index, row in tqdm(nasapower_coords.iterrows(), total=len(nasapower_coords)):
