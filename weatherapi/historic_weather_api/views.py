@@ -278,7 +278,6 @@ def get_era5(lat, lon, interp_mode, var_names_list, data_source, start_datetime,
 def get_era5_land(lat, lon, interp_mode, var_names_list, data_source, start_datetime, end_datetime):
     closest_df = get_closest_points_and_weights(coords_df_era5_land, tree_era5_land, lat, lon)
     merged_df = build_multi_var_df(var_names_list, data_source, closest_df, start_datetime, end_datetime, interp_mode)
-    print(merged_df)
     return(merged_df)
 
 def get_fenz(lat, lon, interp_mode, var_names_list, data_source, start_datetime, end_datetime):
@@ -326,6 +325,8 @@ def get_data(request):
     if isinstance(merged_df, Response):
         return merged_df
 
+    if merged_df.is_empty():
+        return Response({"error": "the data_source exists, but there are no nearby values for your varables within your date range, try reducing the varables requested or increasing the date range"}, status=400)
     # convert to json to pass it out
     data_json = merged_df.write_json(row_oriented=True)
 

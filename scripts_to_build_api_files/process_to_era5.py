@@ -8,10 +8,10 @@ import polars as pl
 import warnings
 from tqdm import tqdm
 
-netcdf4_folder = './era5_raw/'
-output_dir = './era5_parquet/' # note this will place the files in a subdircoty here, you will then have to manually copy them to the static dir in the api, or you could write them directly if you feel like living on the wild side
+netcdf4_folder = './scripts_to_build_api_files/era5_raw/'
+output_dir = './scripts_to_build_api_files/era5/' # note this will place the files in a subdircoty here, you will then have to manually copy them to the static dir in the api, or you could write them directly if you feel like living on the wild side
 
-locs_df = pd.read_csv('nz_coords_era5_proper.csv')
+locs_df = pd.read_csv('./scripts_to_build_api_files/nz_coords_era5_proper.csv')
 
 
 if not os.path.exists(output_dir):
@@ -54,15 +54,20 @@ def get_cur_var_name(col_names):
     variable_names = [var for var in col_names]
     filtered_variable_names = [var for var in variable_names if var not in variables_to_remove]
     if len(filtered_variable_names) > 1:
-        warnings.warn("there are multiple varables in the nc file, you need to check what is going on here will return the full list, which will likely crash code")
-        return filtered_variable_names
+        warnings.warn(f"there are multiple varables in the nc file {filtered_variable_names}, you need to check what is going on here, we will atempt to resolve the problem, but this needs checking")
+        filtered_variable_names = [var for var in filtered_variable_names if var in name_shortcuts]
+        if len(filtered_variable_names) == 1:
+            warnings.warn(f"error resolved by retaining only {filtered_variable_names}, you should still check this manaully")
+            return filtered_variable_names[0]
+        else:
+            return filtered_variable_names
     else:
         return filtered_variable_names[0]
 
 def load_nc_file(file_name, netcdf4_folder, name_shortcuts):
     df= xr.open_dataset(f'./{netcdf4_folder}/{file_name}').to_dataframe().reset_index().dropna()
-
     var_name = get_cur_var_name(df.columns.tolist())
+    df = df[['longitude', 'latitude', 'time', var_name]]
     df.rename(columns=name_shortcuts, inplace=True)
     long_name = name_shortcuts.get(var_name)
     df = pl.from_pandas(df)
@@ -86,7 +91,6 @@ def merge_dataframes(long_name, netcdf4_folder, name_shortcuts):
         long_name_og = '2m_temperature'
     else:
         long_name_og = long_name
-        
     # Initialize merged DataFrame
     merged_df = None
     for file_name in os.listdir(netcdf4_folder):
@@ -103,7 +107,6 @@ def merge_dataframes(long_name, netcdf4_folder, name_shortcuts):
 def write_var_loc_to_para(long_name, netcdf4_folder, unique_locs, name_shortcuts):
     
     df = merge_dataframes(long_name, netcdf4_folder, name_shortcuts)
-
     for loc in unique_locs:
         filtered_df = df.filter(pl.col('loc_id') == loc)
         filtered_df = filtered_df.drop(['loc_id'])
@@ -120,7 +123,6 @@ def loop_over_vars(name_shortcuts, netcdf4_folder, output_dir, locs_df_int, repl
             unique_fnames.append(fnames) # get list of already produced files, note this will include any partually saved varables, ie if var_a has 1 location saved, it will pass this test, and the other locations will not be recalced
     for long_name in tqdm(name_shortcuts.values()):
         if long_name not in unique_fnames:
-            print('processing')
             write_var_loc_to_para(long_name, netcdf4_folder, unique_locs, name_shortcuts)
 
 

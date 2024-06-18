@@ -4,20 +4,21 @@ Process era5_land raw data into varaible location parquet files
 
 
 
-netcdf4_folder = './era5_land_raw/' 
-output_dir = './era5_land_parquet/' # note this will place the files in a subdircoty here, you will then have to manually copy them to the static dir in the api, or you could write them directly if you feel like living on the wild side
+netcdf4_folder = './scripts_to_build_api_files/era5_land_raw/' 
+output_dir = './scripts_to_build_api_files/era5_land/' # note this will place the files in a subdircoty here, you will then have to manually copy them to the static dir in the api, or you could write them directly if you feel like living on the wild side
 
 import zipfile
+import xarray as xr
 import os
 import pandas as pd
 import polars as pl
 import warnings
 from tqdm import tqdm
 
-if not os.path.exists(netcdf4_folder):
-    os.makedirs(netcdf4_folder)
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
 
-locs_df = pd.read_csv('nz_coords_era5_land.csv')
+locs_df = pd.read_csv('./scripts_to_build_api_files/nz_coords_era5_land.csv')
 locs_df_int = locs_df.copy()
 locs_df_int[['longitude_int', 'latitude_int']] = (locs_df[['longitude', 'latitude']]*1000).round().astype(int)
 locs_df_int = locs_df_int.drop(columns=['longitude', 'latitude'])
@@ -56,8 +57,13 @@ def get_cur_var_name(col_names):
     variable_names = [var for var in col_names]
     filtered_variable_names = [var for var in variable_names if var not in variables_to_remove]
     if len(filtered_variable_names) > 1:
-        warnings.warn("there are multiple varables in the nc file, you need to check what is going on here will return the full list, which will likely crash code")
-        return filtered_variable_names
+        warnings.warn(f"there are multiple varables in the nc file {filtered_variable_names}, you need to check what is going on here, we will atempt to resolve the problem, but this needs checking")
+        filtered_variable_names = [var for var in filtered_variable_names if var in name_shortcuts]
+        if len(filtered_variable_names) == 1:
+            warnings.warn(f"error resolved by retaining only {filtered_variable_names}, you should still check this manaully")
+            return filtered_variable_names[0]
+        else:
+            return filtered_variable_names
     else:
         return filtered_variable_names[0]
 
@@ -67,6 +73,7 @@ def load_nc_file(file_name, netcdf4_folder, name_shortcuts):
         df= xr.open_dataset('data.nc').to_dataframe().reset_index().dropna()
 
     var_name = get_cur_var_name(df.columns.tolist())
+    df = df[['longitude', 'latitude', 'time', var_name]]
     df.rename(columns=name_shortcuts, inplace=True)
     long_name = name_shortcuts.get(var_name)
     df = pl.from_pandas(df)
@@ -123,9 +130,7 @@ def loop_over_vars(name_shortcuts, netcdf4_folder, output_dir, locs_df_int, repl
         if fnames not in unique_fnames:
             unique_fnames.append(fnames) # get list of already produced files, note this will include any partually saved varables, ie if var_a has 1 location saved, it will pass this test, and the other locations will not be recalced
     for long_name in tqdm(name_shortcuts.values()):
-        print(long_name)
         if long_name not in unique_fnames:
-            print('processing')
             write_var_loc_to_para(long_name, netcdf4_folder, unique_locs, name_shortcuts)
 
 

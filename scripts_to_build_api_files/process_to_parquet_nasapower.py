@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 
 nasapower_raw_dir = './scripts_to_build_api_files/nasapower_raw/'
-nasapower_parquet_dir = './scripts_to_build_api_files/nasapower_parquet/'# note this will place the files in a subdircoty here, you will then have to manually copy them to the static dir in the api, or you could write them directly if you feel like living on the wild side
+nasapower_parquet_dir = './scripts_to_build_api_files/nasapower/'# note this will place the files in a subdircoty here, you will then have to manually copy them to the static dir in the api, or you could write them directly if you feel like living on the wild side
 
 
 nasapower_coords = pd.read_csv('./scripts_to_build_api_files/nz_coords_merra2.csv') # note that this was manaully created
