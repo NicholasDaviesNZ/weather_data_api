@@ -18,7 +18,7 @@ fenz_dataset = [d for d in datasets if (d['owner'] == 'FENZ')]
 if not os.path.exists(fenz_dir):
     os.makedirs(fenz_dir)
 
-start_date = datetime.strptime("2024-01-01", "%Y-%m-%d")
+start_date = datetime.strptime("2024-06-01", "%Y-%m-%d")
 end_date = datetime.now()
 
 #fenz_dataset = [d for d in datasets if (datetime.strptime(d['time_range']['to_date'], "%Y-%m-%dT%H:%M:%S")>=start_date)]

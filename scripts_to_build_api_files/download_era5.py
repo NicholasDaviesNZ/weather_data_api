@@ -86,7 +86,7 @@ def process_era5():
 
 
 era5_dir = './scripts_to_build_api_files/era5_raw/'
-num_threads = 9
+num_threads = 19
 
 start_date = datetime.strptime("2024-01-01", "%Y-%m-%d")
 end_date = datetime.now()

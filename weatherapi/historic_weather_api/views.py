@@ -158,9 +158,8 @@ def get_single_variable_df(data_source, var_name, closest_df, start_datetime, en
             merged_cur_df = merged_cur_df.drop(f"{var_name}_right")
         if not file_names_hist:
             return(merged_cur_df)
-            
     merged_df = pl.concat([merged_hist_df, merged_cur_df], how="vertical")
-    merged_df = merged_df.unique()
+    merged_df = merged_df.unique(subset=["time"], keep="first")
     return(merged_df)
         
 def build_multi_var_df(var_names_list, data_source, closest_df, start_datetime, end_datetime, interp_mode):
