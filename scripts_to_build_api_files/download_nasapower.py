@@ -2,9 +2,6 @@
 Script to download the raw data from the nasapower api
 """
 
-
-
-
 import pandas as pd
 from pandas.api.types import CategoricalDtype
 import os
@@ -81,6 +78,14 @@ def create_full_nasapower_df(latitude,longitude,start_date,end_date):
     return(final_df)
 
 
+#def get_end_of_historic(file_path):
+
+
+
+file_path = '/workspaces/weather_data_api/weatherapi/historic_weather_api/static/historic/nasapower/temperature_2m_0.parquet'
+tdf = pd.read_parquet(file_path)
+start_date = max(tdf['time'])
+
 start_date = "2024-01-01"
 end_date = datetime.now()
 
@@ -93,8 +98,9 @@ if not os.path.exists(nasapower_dir):
 # nasapower data download loop
 for index, row in tqdm(nasapower_coords.iterrows(), total=len(nasapower_coords)):
    file_path = f"{nasapower_dir}{int(row.loc_id)}.parquet"
+
    if not os.path.exists(file_path):
         # If the file does not exist, create DataFrame and save it
         df = create_full_nasapower_df(row.latitude, row.longitude, start_date, end_date)
-        save_df(df, f"{nasapower_dir}{int(row.loc_id)}")
+        # save_df(df, f"{nasapower_dir}{int(row.loc_id)}")
        

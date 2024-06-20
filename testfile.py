@@ -10,33 +10,26 @@ lat = -42.2
 lon = 172
 
 # nasapower test
-# data_source = 'nasapower'
-# var_name=','.join([str(elem) for elem in [
-#          'temperature_2m', 'relative_humidity_2m', 
-#          'precipitation', 'snowfall', 'snow_depth', 'surface_pressure',
-#          'cloud_cover', 'wind_speed_10m', 'wind_direction_10m',
-#          'wind_speed_50m', 'wind_direction_50m'
-#      ]])
-
-#fenz test
-# data_source = 'fenz'
-# var_name=','.join([str(elem) for elem in [
-#          'precipitation', 'relative_humidity_2m','soil_temperature_level_2','temperature_2m','volumetric_soil_water_layer_2','wind_direction_2m','wind_speed_2m'
-#      ]])
-
+data_source = 'nasapower'
+var_name=','.join([str(elem) for elem in [
+         'temperature_2m', 'relative_humidity_2m', 
+         'precipitation', 'snowfall', 'snow_depth', 'surface_pressure',
+         'cloud_cover', 'wind_speed_10m', 'wind_direction_10m',
+         'wind_speed_50m', 'wind_direction_50m'
+     ]])
 
 #era5 test 
-data_source = 'era5'
-var_name=','.join([str(elem) for elem in [
-          '10m_u_component_of_wind', '10m_v_component_of_wind','dewpoint_temperature_2m',
-           'temperature_2m','soil_temperature_level_1', 'soil_temperature_level_2', 'soil_temperature_level_3',
-                     'runoff','soil_temperature_level_1', 'soil_temperature_level_2', 
-                     'soil_temperature_level_3','sub_surface_runoff', 'surface_runoff','surface_pressure','total_precipitation',
-                      'volumetric_soil_water_layer_1', 'volumetric_soil_water_layer_2', 
-                      'volumetric_soil_water_layer_3', 'evaporation','high_cloud_cover','medium_cloud_cover',
-                      'low_cloud_cover','potential_evaporation','snow_depth','snowfall',
-                      'soil_type','total_cloud_cover','cloud_base_height',
-      ]])
+# data_source = 'era5'
+# var_name=','.join([str(elem) for elem in [
+#           '10m_u_component_of_wind', '10m_v_component_of_wind','dewpoint_temperature_2m',
+#            'temperature_2m','soil_temperature_level_1', 'soil_temperature_level_2', 'soil_temperature_level_3',
+#                      'runoff','soil_temperature_level_1', 'soil_temperature_level_2', 
+#                      'soil_temperature_level_3','sub_surface_runoff', 'surface_runoff','surface_pressure','total_precipitation',
+#                       'volumetric_soil_water_layer_1', 'volumetric_soil_water_layer_2', 
+#                       'volumetric_soil_water_layer_3', 'evaporation','high_cloud_cover','medium_cloud_cover',
+#                       'low_cloud_cover','potential_evaporation','snow_depth','snowfall',
+#                       'soil_type','total_cloud_cover','cloud_base_height',
+#       ]])
 
 
 #era5_land test 
@@ -52,13 +45,17 @@ var_name=','.join([str(elem) for elem in [
 #             'surface_pressure', 'precipitation'
 #             ]])
 
-
+# #fenz test
+# data_source = 'fenz'
+# var_name=','.join([str(elem) for elem in [
+#          'precipitation', 'relative_humidity_2m','soil_temperature_level_2','temperature_2m','volumetric_soil_water_layer_2','wind_direction_2m','wind_speed_2m'
+#      ]])
 
 
 #var_name = 'temperature_2m'
 start_date="2023-01-01"
 end_date="2024-07-28"
-interp_mode = 'idw'
+interp_mode = 'snap'
 
 url = f"http://127.0.0.1:8000/historic/?format=json&data_source={data_source}&lat={lat}&lon={lon}&var_name={var_name}&start_date={start_date}&end_date={end_date}&interp_mode={interp_mode}"
 

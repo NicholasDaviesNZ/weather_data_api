@@ -22,8 +22,8 @@ tree_era5 = cKDTree(coords_df_era5[['latitude', 'longitude']])
 coords_df_era5_land = pd.read_csv(os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_era5_land.csv'))
 tree_era5_land = cKDTree(coords_df_era5_land[['latitude', 'longitude']])
 
-coords_df_fenz = pd.read_csv(os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_FENZ.csv'))
-tree_fenz = cKDTree(coords_df_fenz[['latitude', 'longitude']])
+# coords_df_fenz = pd.read_csv(os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_FENZ.csv'))
+# tree_fenz = cKDTree(coords_df_fenz[['latitude', 'longitude']])
 
 def get_date_ranges_on_start(data_source):
     hist_file_name = os.path.join(settings.BASE_DIR,'historic_weather_api','static', 'historic', f'{data_source}',"temperature_2m_0.parquet")
@@ -46,7 +46,7 @@ minmax_dates = {
     'nasapower':get_date_ranges_on_start('nasapower'),
     'era5':get_date_ranges_on_start('era5'),
     'era5_land':get_date_ranges_on_start('era5_land'),
-    'fenz':get_date_ranges_on_start('fenz'),
+    # 'fenz':get_date_ranges_on_start('fenz'),
     }
 
 # should add a snap IDW option into here to only return 1 or return 4
@@ -82,13 +82,13 @@ def get_single_variable_df(data_source, var_name, closest_df, start_datetime, en
     and reutrn a df which is only the time and the idw value. Note a polars dataframe is returned
     """
 
-    rows_to_remove = []
-    for index, row in closest_df.iterrows():
-        if not os.path.exists(os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'historic', f'{data_source}', f"{var_name}_{int(row['loc_id'])}.parquet")):
-            rows_to_remove.append(index)
+    # rows_to_remove = []
+    # for index, row in closest_df.iterrows():
+    #     if not os.path.exists(os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'historic', f'{data_source}', f"{var_name}_{int(row['loc_id'])}.parquet")):
+    #         rows_to_remove.append(index)
             
             
-    closest_df = closest_df.drop(rows_to_remove)
+    # closest_df = closest_df.drop(rows_to_remove)
 
     if interp_mode.lower() == 'idw':
         closest_df = closest_df.head(4)
@@ -113,8 +113,7 @@ def get_single_variable_df(data_source, var_name, closest_df, start_datetime, en
         for i in range(len(closest_df)):
             file_name = os.path.join(settings.BASE_DIR,'historic_weather_api','static', 'current', f'{data_source}',f"{var_name}_{int(closest_df.iloc[i]['loc_id'])}.parquet")
             file_names_cur.append(file_name)
-        
-
+                  
     # if there are no files that can be loaded, return an empty dataframe to the calling function
     if not file_names_hist and not file_names_cur:
         return(pl.DataFrame(schema={'time': pl.Datetime, var_name: pl.Float64}))
@@ -160,6 +159,10 @@ def get_single_variable_df(data_source, var_name, closest_df, start_datetime, en
             return(merged_cur_df)
     merged_df = pl.concat([merged_hist_df, merged_cur_df], how="vertical")
     merged_df = merged_df.unique(subset=["time"], keep="first")
+    merged_df = merged_df.sort('time')    
+
+    merged_df = df.filter(pl.col(var_name) != -999.0)
+
     return(merged_df)
         
 def build_multi_var_df(var_names_list, data_source, closest_df, start_datetime, end_datetime, interp_mode):
@@ -188,7 +191,7 @@ def run_standard_input_checks(request):
         data_source = data_source.lower()
     else:
         return Response({"error": "data_source is not defined, data_source must be nasapower, era5 or era5_land"}, status=400)
-    if data_source not in ['nasapower', 'era5', 'era5_land', 'fenz']:
+    if data_source not in ['nasapower', 'era5', 'era5_land']:#, 'fenz']:
         return Response({"error": "data_source must be nasapower, era5 or era5_land"}, status=400)
     
     lat = request.query_params.get('lat', None)
@@ -227,10 +230,10 @@ def run_standard_input_checks(request):
             'temperature_2m', 'snow_depth', 'snowfall',
             'surface_pressure', 'precipitation'
             ]
-    elif data_source == 'fenz':
-        valid_var_names = [
-            'precipitation', 'relative_humidity_2m','soil_temperature_level_2','temperature_2m','volumetric_soil_water_layer_2','wind_direction_2m','wind_speed_2m'
-        ]
+    # elif data_source == 'fenz':
+    #     valid_var_names = [
+    #         'precipitation', 'relative_humidity_2m','soil_temperature_level_2','temperature_2m','volumetric_soil_water_layer_2','wind_direction_2m','wind_speed_2m'
+    #     ]
     else: 
         return Response({"error": "data_source has no valid variable names, check you call is correct"}, status=400)
     
@@ -278,10 +281,10 @@ def get_era5_land(lat, lon, interp_mode, var_names_list, data_source, start_date
     merged_df = build_multi_var_df(var_names_list, data_source, closest_df, start_datetime, end_datetime, interp_mode)
     return(merged_df)
 
-def get_fenz(lat, lon, interp_mode, var_names_list, data_source, start_datetime, end_datetime):
-    closest_df = get_closest_points_and_weights(coords_df_fenz, tree_fenz, lat, lon)
-    merged_df = build_multi_var_df(var_names_list, data_source, closest_df, start_datetime, end_datetime, interp_mode)
-    return(merged_df)
+# def get_fenz(lat, lon, interp_mode, var_names_list, data_source, start_datetime, end_datetime):
+#     closest_df = get_closest_points_and_weights(coords_df_fenz, tree_fenz, lat, lon)
+#     merged_df = build_multi_var_df(var_names_list, data_source, closest_df, start_datetime, end_datetime, interp_mode)
+#     return(merged_df)
     
 
 @api_view(['GET'])
@@ -314,10 +317,10 @@ def get_data(request):
         merged_df = get_era5(lat, lon, interp_mode, var_names_list, data_source, start_datetime, end_datetime)
     elif data_source == 'era5_land':
         merged_df = get_era5_land(lat, lon, interp_mode, var_names_list, data_source, start_datetime, end_datetime)
-    elif data_source == 'fenz':
-        merged_df = get_fenz(lat, lon, interp_mode, var_names_list, data_source, start_datetime, end_datetime)
+    # elif data_source == 'fenz':
+    #     merged_df = get_fenz(lat, lon, interp_mode, var_names_list, data_source, start_datetime, end_datetime)
     else:
-        return Response({"error": "data_source not recognised"}, status=400)
+        return Response({"error": "data_source not recognised, must be nasapower, era5 or era5_land"}, status=400)
     
     # check if what was returned from the data_source specific function was a responce error, and if it was return it to the user
     if isinstance(merged_df, Response):

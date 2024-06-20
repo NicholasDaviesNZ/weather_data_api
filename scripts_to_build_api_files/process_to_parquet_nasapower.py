@@ -23,3 +23,7 @@ for index, row in tqdm(nasapower_coords.iterrows()):
         for var_name in var_list:
             df_out = df[['time',var_name]]
             df_out.to_parquet(f"{nasapower_parquet_dir}{var_name}_{int(row.loc_id)}.parquet")
+            
+            
+            
+            
