@@ -82,14 +82,7 @@ def get_single_variable_df(data_source, var_name, closest_df, start_datetime, en
     and reutrn a df which is only the time and the idw value. Note a polars dataframe is returned
     """
 
-    # rows_to_remove = []
-    # for index, row in closest_df.iterrows():
-    #     if not os.path.exists(os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'historic', f'{data_source}', f"{var_name}_{int(row['loc_id'])}.parquet")):
-    #         rows_to_remove.append(index)
-            
-            
-    # closest_df = closest_df.drop(rows_to_remove)
-
+    # this should be updated so that it jsut keeps looking in closest_df until it finds enough to do the interp. then at the end, calculate the weights based on the actual locs used.
     if interp_mode.lower() == 'idw':
         closest_df = closest_df.head(4)
         weights = 1 / closest_df['dist']

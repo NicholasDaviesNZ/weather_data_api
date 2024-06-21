@@ -16,7 +16,7 @@ var_name=','.join([str(elem) for elem in [
           'precipitation', 'surface_pressure',
           'wind_speed_10m', 'wind_direction_10m',
           'wind_speed_50m', 'wind_direction_50m',
-          #'cloud_cover', 'snowfall', 'snow_depth',
+          'cloud_cover', 'snowfall', 'snow_depth',
       ]])
 
 #era5 test 
