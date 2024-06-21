@@ -113,11 +113,10 @@ def get_single_variable_df(data_source, var_name, closest_df, start_datetime, en
         for i in range(len(closest_df)):
             file_name = os.path.join(settings.BASE_DIR,'historic_weather_api','static', 'current', f'{data_source}',f"{var_name}_{int(closest_df.iloc[i]['loc_id'])}.parquet")
             file_names_cur.append(file_name)
-                  
+ 
     # if there are no files that can be loaded, return an empty dataframe to the calling function
     if not file_names_hist and not file_names_cur:
         return(pl.DataFrame(schema={'time': pl.Datetime, var_name: pl.Float64}))
-    
     
     # if there are no files that can be loaded, return an empty dataframe to the calling function
     if file_names_hist:
@@ -128,7 +127,6 @@ def get_single_variable_df(data_source, var_name, closest_df, start_datetime, en
         for i, df in enumerate(results_hist):
             weight = closest_df.iloc[i]['weights']
             results_hist[i] = df.with_columns([(pl.col(var_name) * weight).alias(var_name)])
-
         merged_hist_df = results_hist[0]
         
         for i, df in enumerate(results_hist[1:], start=1):
@@ -147,7 +145,6 @@ def get_single_variable_df(data_source, var_name, closest_df, start_datetime, en
         for i, df in enumerate(results_cur):
             weight = closest_df.iloc[i]['weights']
             results_cur[i] = df.with_columns([(pl.col(var_name) * weight).alias(var_name)])
-
         merged_cur_df = results_cur[0]
 
         for i, df in enumerate(results_cur[1:], start=1):
@@ -157,11 +154,16 @@ def get_single_variable_df(data_source, var_name, closest_df, start_datetime, en
             merged_cur_df = merged_cur_df.drop(f"{var_name}_right")
         if not file_names_hist:
             return(merged_cur_df)
+
+    merged_hist_df = merged_hist_df.with_columns(pl.col(var_name).cast(pl.Float64))
+    merged_cur_df = merged_cur_df.with_columns(pl.col(var_name).cast(pl.Float64))
+    
     merged_df = pl.concat([merged_hist_df, merged_cur_df], how="vertical")
+    
     merged_df = merged_df.unique(subset=["time"], keep="first")
     merged_df = merged_df.sort('time')    
-
-    merged_df = df.filter(pl.col(var_name) != -999.0)
+    
+    merged_df = merged_df.filter(pl.col(var_name) != -999.0)
 
     return(merged_df)
         
@@ -210,7 +212,7 @@ def run_standard_input_checks(request):
             'temperature_2m', 'relative_humidity_2m', 
             'precipitation', 'snowfall', 'snow_depth', 'surface_pressure',
             'cloud_cover', 'wind_speed_10m', 'wind_direction_10m',
-            'wind_speed_50m', 'wind_direction_50m'
+            'wind_speed_50m', 'wind_direction_50m','dewpoint_temperature_2m',
             ]
     elif data_source == 'era5':
         valid_var_names = [

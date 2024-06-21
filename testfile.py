@@ -12,11 +12,12 @@ lon = 172
 # nasapower test
 data_source = 'nasapower'
 var_name=','.join([str(elem) for elem in [
-         'temperature_2m', 'relative_humidity_2m', 
-         'precipitation', 'snowfall', 'snow_depth', 'surface_pressure',
-         'cloud_cover', 'wind_speed_10m', 'wind_direction_10m',
-         'wind_speed_50m', 'wind_direction_50m'
-     ]])
+          'temperature_2m', 'relative_humidity_2m', 'dewpoint_temperature_2m',
+          'precipitation', 'surface_pressure',
+          'wind_speed_10m', 'wind_direction_10m',
+          'wind_speed_50m', 'wind_direction_50m',
+          #'cloud_cover', 'snowfall', 'snow_depth',
+      ]])
 
 #era5 test 
 # data_source = 'era5'
@@ -54,7 +55,7 @@ var_name=','.join([str(elem) for elem in [
 
 #var_name = 'temperature_2m'
 start_date="2023-01-01"
-end_date="2024-07-28"
+end_date="2024-07-31"
 interp_mode = 'snap'
 
 url = f"http://127.0.0.1:8000/historic/?format=json&data_source={data_source}&lat={lat}&lon={lon}&var_name={var_name}&start_date={start_date}&end_date={end_date}&interp_mode={interp_mode}"

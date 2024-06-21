@@ -28,12 +28,12 @@ if not os.path.exists(nasapower_parquet_dir):
 if not os.path.exists(nasapower_parquet_current_dir):
     os.makedirs(nasapower_parquet_current_dir)
 
-nasapower_vars = [
-         'temperature_2m', 'relative_humidity_2m', 
-         'precipitation', 'snowfall', 'snow_depth', 'surface_pressure',
-         'cloud_cover', 'wind_speed_10m', 'wind_direction_10m',
-         'wind_speed_50m', 'wind_direction_50m'
-     ]
+# nasapower_vars = [
+#          'temperature_2m', 'relative_humidity_2m', 
+#          'precipitation', 'snowfall', 'snow_depth', 'surface_pressure',
+#          'cloud_cover', 'wind_speed_10m', 'wind_direction_10m',
+#          'wind_speed_50m', 'wind_direction_50m'
+#      ]
 
 
 nasapower_raw_list = os.listdir(nasapower_raw_dir)
@@ -150,6 +150,7 @@ def convert_raw_nasapower_to_parquet_current(row, file_path, nasapower_parquet_c
     for var_name in var_list:
         try:
             df_out = df[['time',var_name]]
+            df_out = df_out[df_out[var_name] != -999.0]
             df_out.to_parquet(f"{nasapower_parquet_current_dir}{var_name}_{int(row.loc_id)}.parquet")
         except Exception as exc:
             print(f'Error saving file: {exc}')
@@ -168,8 +169,3 @@ with concurrent.futures.ProcessPoolExecutor() as executor:
         except Exception as exc:
             print(f'Error in processing: {exc}')
             
-# split nasapower to varable_loc.parquet
-for index, row in tqdm(nasapower_coords.iterrows()):
-    file_path = f"{nasapower_raw_dir}{int(row.loc_id)}.parquet"
-    if os.path.exists(file_path):
-        convert_raw_nasapower_to_parquet_current(row, file_path, nasapower_parquet_current_dir)
