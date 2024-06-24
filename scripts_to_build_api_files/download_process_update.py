@@ -36,17 +36,7 @@ end_hist_dates_df = get_or_build_max_dates(max_dates_path, hist_list, hist_dir, 
 
 get_and_write_raw(data_source, end_hist_dates_df, end_date, raw_dir, coords)
 
+convert_raw_to_parquet_current(data_source, coords, raw_dir, current_dir)
 
-futures = []
-with concurrent.futures.ProcessPoolExecutor() as executor:
-    for _, row in coords.iterrows():
-        file_path = f"{raw_dir}{int(row.loc_id)}.parquet"
-        if os.path.exists(file_path):
-            futures.append(executor.submit(nasapower_convert_raw_to_parquet_current, row, file_path, current_dir))
-    
-    for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures)):
-        try:
-            result = future.result()
-        except Exception as exc:
-            print(f'Error in processing: {exc}')
+
             

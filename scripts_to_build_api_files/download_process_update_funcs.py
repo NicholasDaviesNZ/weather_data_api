@@ -1,4 +1,5 @@
 import pandas as pd
+import polars as pl
 import requests
 import json
 from datetime import datetime, timedelta
@@ -9,6 +10,8 @@ import concurrent.futures
 from tqdm import tqdm
 import itertools
 import os
+import zipfile
+import xarray as xr
 from dotenv import load_dotenv
 load_dotenv() # load the env variables from the .env file, needs to have CDSAPI_URL and CDSAPI_KEY from your cds store account
 
@@ -96,41 +99,6 @@ def create_full_nasapower_df(row,start_date,end_date, raw_dir):
     final_df = pd.concat(dfs, ignore_index=True)
     
     final_df.to_parquet(f'{raw_dir}{int(row.loc_id)}.parquet', compression='brotli')
-
-
-def nasapower_convert_raw_to_parquet_current(row, file_path, parquet_current_dir):
-    try:
-        df = pd.read_parquet(file_path)
-        df = df.rename(columns={'date':'time'})
-        var_list = df.columns.to_list()
-        var_list.remove('time')
-    except Exception as exc:
-        print(f'Error loading raw file: {exc}')
-    for var_name in var_list:
-        try:
-            df_out = df[['time',var_name]]
-            df_out = df_out[df_out[var_name] != -999.0]
-            df_out.to_parquet(f"{parquet_current_dir}{var_name}_{int(row.loc_id)}.parquet")
-        except Exception as exc:
-            print(f'Error saving file: {exc}')
-        
-        
-def nasapower_convert_raw_to_parquet_current(row, file_path, parquet_current_dir):
-    try:
-        df = pd.read_parquet(file_path)
-        df = df.rename(columns={'date':'time'})
-        var_list = df.columns.to_list()
-        var_list.remove('time')
-    except Exception as exc:
-        print(f'Error loading raw file: {exc}')
-    for var_name in var_list:
-        try:
-            df_out = df[['time',var_name]]
-            df_out = df_out[df_out[var_name] != -999.0]
-            df_out.to_parquet(f"{parquet_current_dir}{var_name}_{int(row.loc_id)}.parquet")
-        except Exception as exc:
-            print(f'Error saving file: {exc}')
-            
 
             
 def get_unique_months_years(start_date, end_date):    
@@ -253,3 +221,180 @@ def get_and_write_raw(data_source,end_hist_dates_df, end_date, raw_dir, coords):
     except Exception as e:
         print(f'Error processing loc_id {row.loc_id}: {e}')
         
+        
+        
+        
+def nasapower_convert_raw_to_parquet_current(row, file_path, parquet_current_dir):
+    try:
+        df = pd.read_parquet(file_path)
+        df = df.rename(columns={'date':'time'})
+        var_list = df.columns.to_list()
+        var_list.remove('time')
+    except Exception as exc:
+        print(f'Error loading raw file: {exc}')
+    for var_name in var_list:
+        try:
+            df_out = df[['time',var_name]]
+            df_out = df_out[df_out[var_name] != -999.0]
+            df_out.to_parquet(f"{parquet_current_dir}{var_name}_{int(row.loc_id)}.parquet")
+        except Exception as exc:
+            print(f'Error saving file: {exc}')
+            
+def get_cur_var_name(col_names, name_shortcuts):
+    variables_to_remove = ['longitude', 'latitude', 'time']
+    variable_names = [var for var in col_names]
+    filtered_variable_names = [var for var in variable_names if var not in variables_to_remove]
+    if len(filtered_variable_names) > 1:
+        warnings.warn(f"there are multiple varables in the nc file {filtered_variable_names}, you need to check what is going on here, we will atempt to resolve the problem, but this needs checking")
+        filtered_variable_names = [var for var in filtered_variable_names if var in name_shortcuts]
+        if len(filtered_variable_names) == 1:
+            warnings.warn(f"error resolved by retaining only {filtered_variable_names}, you should still check this manaully")
+            return filtered_variable_names[0]
+        else:
+            return filtered_variable_names
+    else:
+        return filtered_variable_names[0]
+    
+def load_nc_file(data_source, file_name, raw_dir, name_shortcuts, locs_df_int):
+    if data_source == "era5":
+        df = xr.open_dataset(f'{raw_dir}{file_name}').to_dataframe().reset_index().dropna()
+    elif data_source == "era5_land":
+        with zipfile.ZipFile(f'{raw_dir}{file_name}', 'r') as zip_ref:
+            zip_ref.extractall()  # Extract files to a temporary folder
+            df = xr.open_dataset('data.nc').to_dataframe().reset_index().dropna()
+            
+    var_name = get_cur_var_name(df.columns.tolist())
+    df = df[['longitude', 'latitude', 'time', var_name]]
+    df.rename(columns=name_shortcuts, inplace=True)
+    long_name = name_shortcuts.get(var_name)
+    df = pl.from_pandas(df)
+    if long_name in ['soil_temperature_level_1','soil_temperature_level_2','soil_temperature_level_3','2m_dewpoint_temperature','temperature_2m']:
+        df = (df.select([pl.col(long_name) - 273.15, pl.exclude(long_name)]))
+
+    df = df.with_columns([
+        (pl.col('longitude') * 1000).round().cast(pl.Int64).alias('longitude_int'), 
+        (pl.col('latitude') * 1000).round().cast(pl.Int64).alias('latitude_int')
+    ])
+
+    df_merge = df.join(locs_df_int, on=['longitude_int','latitude_int'])
+    df_merge = df_merge.drop(['longitude', 'latitude', 'longitude_int', 'latitude_int'])
+    return df_merge 
+
+def merge_dataframes(data_source, long_name, raw_dir, name_shortcuts):
+    if long_name == 'dewpoint_temperature_2m':
+        long_name_og = '2m_dewpoint_temperature'
+    elif long_name == 'temperature_2m':
+        long_name_og = '2m_temperature'
+    elif long_name == 'precipitation':
+        long_name_og = 'total_precipitation'
+    else:
+        long_name_og = long_name
+    merged_df = None
+    for file_name in os.listdir(raw_dir):
+        
+        if file_name.split("_")[:-2]==long_name_og.split("_") and (file_name.endswith('.netcdf.zip') or  file_name.endswith('.nc')):
+            df = load_nc_file(data_source, file_name, raw_dir, name_shortcuts)
+            if merged_df is None:
+                merged_df = df
+            else:
+                merged_df = pl.concat([merged_df, df])
+    merged_df = merged_df.sort("time")
+    return merged_df
+
+def write_var_loc_to_para(data_source, long_name, raw_dir, current_dir, unique_locs, name_shortcuts):
+    
+    df = merge_dataframes(data_source, long_name, raw_dir, name_shortcuts)
+    for loc in unique_locs:
+        filtered_df = df.filter(pl.col('loc_id') == loc)
+        filtered_df = filtered_df.drop(['loc_id'])
+        output_file = f"{current_dir}{long_name}_{loc}.parquet"
+        filtered_df.write_parquet(output_file)
+        filtered_df = None
+
+
+def convert_raw_to_parquet_current(data_source, coords, raw_dir, current_dir):
+    if data_source == 'nasapower':
+        futures = []
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            for _, row in coords.iterrows():
+                file_path = f"{raw_dir}{int(row.loc_id)}.parquet"
+                if os.path.exists(file_path):
+                    futures.append(executor.submit(nasapower_convert_raw_to_parquet_current, row, file_path, current_dir))
+    
+            for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures)):
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    print(f'Error in processing: {exc}')
+                    
+    elif data_source == 'era5' or data_source == 'era5_land':
+        locs_df_int = coords.copy()
+        locs_df_int[['longitude_int', 'latitude_int']] = (coords[['longitude', 'latitude']]*1000).round().astype(int)
+        locs_df_int = locs_df_int.drop(columns=['longitude', 'latitude'])
+        locs_df_int = pl.from_pandas(locs_df_int)
+        unique_locs = locs_df_int['loc_id'].unique().to_list()
+        
+        if data_source == 'era5':
+            name_shortcuts = {'u10': '10m_u_component_of_wind',
+                'v10': '10m_v_component_of_wind',
+                'd2m': 'dewpoint_temperature_2m',
+                't2m': 'temperature_2m',
+                'stl1': 'soil_temperature_level_1',
+                'stl2': 'soil_temperature_level_2',
+                'stl3': 'soil_temperature_level_3',
+                'ro': 'runoff',
+                'ssro': 'sub_surface_runoff',
+                'sro': 'surface_runoff',
+                'sp': 'surface_pressure',
+                'tp': 'total_precipitation',
+                'swvl1': 'volumetric_soil_water_layer_1',
+                'swvl2': 'volumetric_soil_water_layer_2',
+                'swvl3': 'volumetric_soil_water_layer_3',
+                'cbh': 'cloud_base_height',
+                'e': 'evaporation',
+                'hcc': 'high_cloud_cover',
+                'mcc': 'medium_cloud_cover',
+                'lcc': 'low_cloud_cover',
+                'pev': 'potential_evaporation',
+                'sd': 'snow_depth',
+                'sf': 'snowfall',
+                'slt': 'soil_type',
+                'tcc': 'total_cloud_cover'}
+        elif data_source == 'era5_land':
+            name_shortcuts = {
+                'evabs':'evaporation_from_bare_soil',
+                'evaow':'evaporation_from_open_water_surfaces_excluding_oceans',
+                'evatc':'evaporation_from_the_top_of_canopy',
+                'evavt':'evaporation_from_vegetation_transpiration',
+                'pev':'potential_evaporation',
+                'ro':'runoff',
+                'stl1':'soil_temperature_level_1',
+                'stl2':'soil_temperature_level_2',
+                'stl3':'soil_temperature_level_3',
+                'ssro':'sub_surface_runoff',
+                'sro':'surface_runoff',
+                'e':'total_evaporation',
+                'swvl1':'volumetric_soil_water_layer_1',
+                'swvl2':'volumetric_soil_water_layer_2',
+                'swvl3':'volumetric_soil_water_layer_3',
+                'u10':'10m_u_component_of_wind',
+                'v10':'10m_v_component_of_wind',
+                'd2m':'dewpoint_temperature_2m',
+                't2m':'temperature_2m',
+                'sde':'snow_depth',
+                'sf':'snowfall',
+                'sp':'surface_pressure',
+                'tp':'precipitation'}
+            
+        futures = []
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            for long_name in name_shortcuts.values():
+
+                if os.path.exists(file_path):
+                    futures.append(executor.submit(write_var_loc_to_para, data_source, long_name, raw_dir, current_dir, unique_locs, name_shortcuts))
+    
+            for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures)):
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    print(f'Error in processing: {exc}')
