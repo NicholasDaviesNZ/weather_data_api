@@ -13,10 +13,10 @@ from scipy.spatial import cKDTree
 import time as timer
 from concurrent.futures import ThreadPoolExecutor
 
-coords_df_np = pd.read_csv(os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_merra2.csv'))
+coords_df_np = pd.read_csv(os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_nasapower.csv'))
 tree_np = cKDTree(coords_df_np[['latitude', 'longitude']])
 
-coords_df_era5 = pd.read_csv(os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_era5_proper.csv'))
+coords_df_era5 = pd.read_csv(os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_era5.csv'))
 tree_era5 = cKDTree(coords_df_era5[['latitude', 'longitude']])
 
 coords_df_era5_land = pd.read_csv(os.path.join(settings.BASE_DIR, 'historic_weather_api', 'static', 'coords', 'nz_coords_era5_land.csv'))

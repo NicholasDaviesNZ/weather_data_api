@@ -84,9 +84,12 @@ def get_and_write_raw(data_source, row, end_hist_dates_df, end_date, raw_dir):
             df = create_full_nasapower_df(row.latitude, row.longitude, start_date, end_date)
         elif data_source == 'era5' or data_source == 'era5_land':
             start_date = (start_date - relativedelta(months=5)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            warnings.warn(f'data soruce: {data_source} is not implemented for download or processing')
+            return
             
         else:
             warnings.warn(f'data soruce: {data_source} is not implemented for download or processing')
+            return
         
         df.to_parquet(f'{raw_dir}{int(row.loc_id)}.parquet', compression='brotli')
     except Exception as e:
