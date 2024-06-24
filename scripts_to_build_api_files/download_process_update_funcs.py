@@ -398,3 +398,87 @@ def convert_raw_to_parquet_current(data_source, coords, raw_dir, current_dir):
                     result = future.result()
                 except Exception as exc:
                     print(f'Error in processing: {exc}')
+                    
+                    
+                    
+                    
+def merge_cur_hist(data_source, cur_file, current_dir, hist_dir, force_copy_all_current = False):
+    cur_file_path = f'{current_dir}{cur_file}' 
+    hist_file_path = f'{hist_dir}{cur_file}'
+    try:
+        cur_file = pl.read_parquet(cur_file_path).select(pl.all().exclude("^__index_level_.*$"))
+        if cur_file.is_empty():
+            print("cur file is empty")
+            return
+    except Exception as e:
+        print(f"Error reading {cur_file_path}: {e}")
+        return
+
+    try:
+        hist_file = pl.read_parquet(hist_file_path).select(pl.all().exclude("^__index_level_.*$")) 
+    except Exception as e:
+        print(f"Error reading {hist_file_path}: {e}")
+        pass
+    
+    if data_source == 'era5' or data_source == 'era5_land':
+        months_to_remove = 5
+    elif data_source == 'nasapower':
+        months_to_remove = 1
+    else:
+        warnings.warn('data_sorce is not picked up in the if block to set the time to hold onto for current data')
+    
+    if force_copy_all_current != True:
+        cur_max_date = cur_file.select(pl.col('time')).max()
+        date_to_copy_current_up_to = (pd.to_datetime(cur_max_date['time'][0])- relativedelta(months=months_to_remove)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        cur_to_hist = cur_file.filter(pl.col('time') < date_to_copy_current_up_to)
+    else:
+        cur_to_hist = cur_file
+        
+    if cur_to_hist.is_empty():
+        return
+
+    hist_file = hist_file.with_columns(pl.col(hist_file.columns[1]).cast(pl.Float64))
+    new_hist = pl.concat([cur_to_hist, hist_file], how='vertical')
+    new_hist = new_hist.unique(subset=["time"], keep="first")
+    new_hist = new_hist.sort('time') 
+    try:
+        new_hist.write_parquet(hist_file_path)
+    except Exception as e:
+        print(f"Error writing {hist_file_path}: {e}")
+    
+    if force_copy_all_current != True:
+        replace_cur = cur_file.filter(pl.col('time') >= date_to_copy_current_up_to)
+        try:
+            replace_cur.write_parquet(cur_file_path)
+        except Exception as e:
+            print(f"Error writing {cur_file_path}: {e}")
+        
+    else:
+        try:
+            os.remove(cur_file_path)
+        except Exception as e:
+            print(f"Error deleting {cur_file_path}: {e}")
+            
+            
+def merge_current_to_historic(data_source, current_dir, hist_dir, force_copy_all_current = False):
+    # move into function
+    current_files = set(os.listdir(current_dir))
+    hist_files = set(os.listdir(hist_dir))
+
+    mismatched_files = list(current_files-hist_files)+list(hist_files-current_files)
+
+    warnings.warn(f'files in current but not historic: {current_files-hist_files} will not perform merge')
+    warnings.warn(f'files in historic but not current: {hist_files-current_files} will not perform merge')
+
+    # if the historic and current files dont match, do not run merge
+    if not mismatched_files:
+        futures = []
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            for cur_file in current_files:
+                futures.append(executor.submit(merge_cur_hist, data_source, cur_file, current_dir, hist_dir, force_copy_all_current = False))
+    
+            for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures)):
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    print(f'Error in processing: {exc}')

@@ -1,8 +1,6 @@
 import pandas as pd
 import os
-from tqdm import tqdm
 from datetime import datetime
-import concurrent.futures
 from .download_process_update_funcs import *
 
 data_source = 'nasapower' # need ot refactor to make this generic through the script
@@ -34,9 +32,9 @@ end_date = datetime.now()
 
 end_hist_dates_df = get_or_build_max_dates(max_dates_path, hist_list, hist_dir, coords)
 
-get_and_write_raw(data_source, end_hist_dates_df, end_date, raw_dir, coords)
+# if you need to download old stuff, dont run get_or_build_max_dates, manually create a df with a single loc and an end date to pass in as end_hist_dates_df 
+get_and_write_raw(data_source, end_hist_dates_df, end_date, raw_dir, coords) 
 
 convert_raw_to_parquet_current(data_source, coords, raw_dir, current_dir)
 
-
-            
+merge_current_to_historic(data_source, current_dir, hist_dir, force_copy_all_current = False)

@@ -28,24 +28,28 @@ print('files in current but not historic: ',nasapower_cur_files-nasapower_hist_f
 print('files in historic but not current: ',nasapower_hist_files-nasapower_cur_files)
 
 
-def merge_cur_hist(cur_file, nasapower_parquet_current_dir, nasapower_parquet_dir):
-    cur_file_path = f'{nasapower_parquet_current_dir}{cur_file}'
+def merge_cur_hist(cur_file, nasapower_parquet_current_dir, nasapower_parquet_dir, force_copy_all_current = False):
+    cur_file_path = f'{nasapower_parquet_current_dir}{cur_file}' 
     hist_file_path = f'{nasapower_parquet_dir}{cur_file}'
     
-    cur_file = pl.read_parquet(cur_file_path).select(pl.all().exclude("^__index_level_.*$"))
+    cur_file = pl.read_parquet(cur_file_path).select(pl.all().exclude("^__index_level_.*$"))# need error checkign to make sure file exists
     if cur_file.is_empty():
         return
-    hist_file = pl.read_parquet(hist_file_path).select(pl.all().exclude("^__index_level_.*$"))
+    hist_file = pl.read_parquet(hist_file_path).select(pl.all().exclude("^__index_level_.*$")) # need error checkign to make sure file exists
     if data_source == 'era5' or data_source == 'era5_land':
         months_to_remove = 5
     elif data_source == 'nasapower':
         months_to_remove = 1
     else:
         warnings.warn('data_sorce is not picked up in the if block to set the time to hold onto for current data')
+    
+    if force_copy_all_current != True:
+        cur_max_date = cur_file.select(pl.col('time')).max()
+        date_to_copy_current_up_to = (pd.to_datetime(cur_max_date['time'][0])- relativedelta(months=months_to_remove)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        cur_to_hist = cur_file.filter(pl.col('time') < date_to_copy_current_up_to)
+    else:
+        cur_to_hist = cur_file
         
-    cur_max_date = cur_file.select(pl.col('time')).max()
-    date_to_copy_current_up_to = (pd.to_datetime(cur_max_date['time'][0])- relativedelta(months=months_to_remove)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    cur_to_hist = cur_file.filter(pl.col('time') < date_to_copy_current_up_to)
     if cur_to_hist.is_empty():
         return
 
@@ -53,11 +57,24 @@ def merge_cur_hist(cur_file, nasapower_parquet_current_dir, nasapower_parquet_di
     new_hist = pl.concat([cur_to_hist, hist_file], how='vertical')
     new_hist = new_hist.unique(subset=["time"], keep="first")
     new_hist = new_hist.sort('time') 
-    new_hist.write_parquet(hist_file_path)
+    try:
+        new_hist.write_parquet(hist_file_path)
+    except Exception as e:
+        print(f"Error writing {hist_file_path}: {e}")
     
-    replace_cur = cur_file.filter(pl.col('time') >= date_to_copy_current_up_to)
-    replace_cur.write_parquet(cur_file_path)
-
+    if force_copy_all_current != True:
+        replace_cur = cur_file.filter(pl.col('time') >= date_to_copy_current_up_to)
+        try:
+            replace_cur.write_parquet(cur_file_path)
+        except Exception as e:
+            print(f"Error writing {cur_file_path}: {e}")
+        
+    else:
+        try:
+            os.remove(cur_file_path)
+        except Exception as e:
+            print(f"Error deleting {cur_file_path}: {e}")
+        
 # if the historic and current files dont match, do not run merge
 if not mismatched_files:
     futures = []

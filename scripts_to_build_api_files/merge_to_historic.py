@@ -7,6 +7,14 @@ import warnings
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
+
+
+
+###### keep in mind you might be merging into history something older than the history itself. 
+
+
+
+
 base_path = '/workspaces/weather_data_api/weatherapi/historic_weather_api/static/'
 
 era5_locs_df = pd.read_csv(f'{base_path}coords/nz_coords_era5_proper.csv')
