@@ -33,12 +33,13 @@ def get_max_date(loc_id, max_date_tracker, parquet_list, parquet_dir):
 # note this is really slow, so we avoid doing it if we can
 # note cpu bound task
 def get_or_build_max_dates(max_dates_path, hist_list, hist_dir, coords, start_date = '2001-01-01', max_threads = 19):
+    
     if not os.path.exists(max_dates_path) and hist_list:
+        print('building the max dates file, this may take a while')
         max_dates_dict = {}
         max_date_tracker_base = datetime.now()
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_threads) as executor:
             future_to_file = {executor.submit(get_max_date, int(row['loc_id']), max_date_tracker_base, hist_list, hist_dir): row['loc_id'] for _, row in coords.iterrows()}
-
             for future in tqdm(concurrent.futures.as_completed(future_to_file), total=len(future_to_file)):
                 file = future_to_file[future]
                 try:
@@ -106,28 +107,21 @@ def create_full_nasapower_df(row,start_date,end_date, raw_dir):
     final_df.to_parquet(f'{raw_dir}{int(row.loc_id)}.parquet', compression='brotli')
 
             
-def get_unique_months_years(start_date, end_date):    
-    # Get unique months
-    unique_months = set()
+def get_unique_months_years(start_date, end_date):
+    # Generate a list of all dates between start_date and end_date
     current_date = start_date
+    all_dates = []
     while current_date <= end_date:
-        unique_months.add((current_date.month))
-        if current_date.month == 12:
-            current_date = current_date.replace(year=current_date.year + 1, month=1)
-        else:
-            current_date = current_date.replace(month=current_date.month + 1)
-    # Get unique years
-    unique_years = set()
-    current_date = start_date
-    while current_date.year <= end_date.year:
-        unique_years.add(current_date.year)
-        current_date = current_date.replace(year=current_date.year + 1)
-    
-    # Convert sets to sorted lists
-    unique_months = sorted(unique_months)
-    unique_years = sorted(unique_years)
-    
-    return unique_months, unique_years
+        all_dates.append(current_date)
+        current_date += timedelta(days=1)
+
+    # Extract month-year pairs and remove duplicates
+    unique_months_years = {(date.month, date.year) for date in all_dates}
+
+    # Convert set to sorted list of tuples
+    unique_months_years = sorted(unique_months_years, key=lambda x: (x[1], x[0]))
+
+    return unique_months_years
 
 
 
@@ -173,6 +167,7 @@ def get_era5_data(year, month, var_to_collect, raw_dir, ds_name_string):
     
 def get_and_write_raw(data_source,end_hist_dates_df, end_date, raw_dir, coords, max_threads=19):
     try:
+        print(f'downloading the raw data for {data_source}')
         if data_source == 'nasapower':
             futures = []
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_threads) as executor:
@@ -180,7 +175,7 @@ def get_and_write_raw(data_source,end_hist_dates_df, end_date, raw_dir, coords, 
                     start_date = pd.to_datetime(end_hist_dates_df[end_hist_dates_df.loc_id == int(row.loc_id)].time.values[0])
                     start_date = (start_date - relativedelta(months=1)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
                     futures.append(executor.submit(create_full_nasapower_df, row, start_date, end_date, raw_dir))
-        
+                
                 for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures)):
                     try:
                         result = future.result()
@@ -188,9 +183,11 @@ def get_and_write_raw(data_source,end_hist_dates_df, end_date, raw_dir, coords, 
                         print(f'Error in processing: {exc}')
                         
         elif data_source == 'era5' or data_source == 'era5_land':
-            start_date = pd.to_datetime(min(end_hist_dates_df.time).values[0])
+            start_date = pd.to_datetime(min(end_hist_dates_df['time']))
+
             start_date = (start_date - relativedelta(months=5)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            monthly_list, yearly_list = get_unique_months_years(start_date, end_date)
+
+            monthly_yearly_list = get_unique_months_years(start_date, end_date)
             
             if data_source == 'era5':
                 ds_name_string = 'reanalysis-era5-single-levels'
@@ -209,8 +206,9 @@ def get_and_write_raw(data_source,end_hist_dates_df, end_date, raw_dir, coords, 
                     '2m_temperature', 'snow_depth', 'snowfall',
                     'surface_pressure', 'total_precipitation']
             
-            requested_combinations = list(itertools.product(yearly_list, monthly_list, var_to_collect))
-            
+            requested_combinations = list(itertools.product(monthly_yearly_list, var_to_collect))
+            requested_combinations = [(year, month, var) for (month, year), var in requested_combinations]
+
             futures = []
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_threads) as executor:
                 for year, month, var_to_collect in requested_combinations:
@@ -318,6 +316,7 @@ def write_var_loc_to_para(data_source, long_name, raw_dir, current_dir, unique_l
 
 
 def convert_raw_to_parquet_current(data_source, coords, raw_dir, current_dir, max_threads=19):
+    print(f'converting raw data into paraquat format for {data_source}')
     if data_source == 'nasapower':
         futures = []
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_threads) as executor:
@@ -413,7 +412,6 @@ def merge_cur_hist(data_source, cur_file, current_dir, hist_dir, force_copy_all_
     try:
         cur_file = pl.read_parquet(cur_file_path).select(pl.all().exclude("^__index_level_.*$"))
         if cur_file.is_empty():
-            print("cur file is empty")
             return
     except Exception as e:
         print(f"Error reading {cur_file_path}: {e}")
@@ -478,6 +476,7 @@ def merge_current_to_historic(data_source, current_dir, hist_dir, force_copy_all
     # if the historic and current files dont match, do not run merge
     if not mismatched_files:
         futures = []
+        print('merging older current files into the historic files, this may take a while')
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_threads) as executor:
             for cur_file in current_files:
                 futures.append(executor.submit(merge_cur_hist, data_source, cur_file, current_dir, hist_dir, force_copy_all_current = False))
