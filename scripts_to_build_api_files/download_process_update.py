@@ -30,6 +30,7 @@ end_date = datetime.now()
 
 
 
+# note all ofthese are parrellel and are set with max_threads=19 by default, you can increase/decrease but keep in mind the cds api has a limit of 20 concurant connetions (at the time of writing)
 end_hist_dates_df = get_or_build_max_dates(max_dates_path, hist_list, hist_dir, coords)
 
 # if you need to download old stuff, dont run get_or_build_max_dates, manually create a df with a single loc and an end date to pass in as end_hist_dates_df 

@@ -32,11 +32,11 @@ def get_max_date(loc_id, max_date_tracker, parquet_list, parquet_dir):
 
 # note this is really slow, so we avoid doing it if we can
 # note cpu bound task
-def get_or_build_max_dates(max_dates_path,hist_list, hist_dir, coords):
+def get_or_build_max_dates(max_dates_path,hist_list, hist_dir, coords, max_threads = 19):
     if not os.path.exists(max_dates_path):
         max_dates_dict = {}
         max_date_tracker_base = datetime.now()
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_threads) as executor:
             future_to_file = {executor.submit(get_max_date, int(row['loc_id']), max_date_tracker_base, hist_list, hist_dir): row['loc_id'] for _, row in coords.iterrows()}
 
             for future in tqdm(concurrent.futures.as_completed(future_to_file), total=len(future_to_file)):
@@ -166,11 +166,11 @@ def get_era5_data(year, month, var_to_collect, raw_dir, ds_name_string):
     
 
     
-def get_and_write_raw(data_source,end_hist_dates_df, end_date, raw_dir, coords):
+def get_and_write_raw(data_source,end_hist_dates_df, end_date, raw_dir, coords, max_threads=19):
     try:
         if data_source == 'nasapower':
             futures = []
-            with concurrent.futures.ProcessPoolExecutor() as executor:
+            with concurrent.futures.ProcessPoolExecutor(max_workers=max_threads) as executor:
                 for _, row in coords.iterrows():
                     start_date = pd.to_datetime(end_hist_dates_df[end_hist_dates_df.loc_id == int(row.loc_id)].time.values[0])
                     start_date = (start_date - relativedelta(months=1)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -207,7 +207,7 @@ def get_and_write_raw(data_source,end_hist_dates_df, end_date, raw_dir, coords):
             requested_combinations = list(itertools.product(yearly_list, monthly_list, var_to_collect))
             
             futures = []
-            with concurrent.futures.ProcessPoolExecutor() as executor:
+            with concurrent.futures.ProcessPoolExecutor(max_workers=max_threads) as executor:
                 for year, month, var_to_collect in requested_combinations:
                     future = executor.submit(get_era5_data, year, month, var_to_collect, raw_dir, ds_name_string)
                     futures.append(future)
@@ -312,10 +312,10 @@ def write_var_loc_to_para(data_source, long_name, raw_dir, current_dir, unique_l
         filtered_df = None
 
 
-def convert_raw_to_parquet_current(data_source, coords, raw_dir, current_dir):
+def convert_raw_to_parquet_current(data_source, coords, raw_dir, current_dir, max_threads=19):
     if data_source == 'nasapower':
         futures = []
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_threads) as executor:
             for _, row in coords.iterrows():
                 file_path = f"{raw_dir}{int(row.loc_id)}.parquet"
                 if os.path.exists(file_path):
@@ -387,7 +387,7 @@ def convert_raw_to_parquet_current(data_source, coords, raw_dir, current_dir):
                 'tp':'precipitation'}
             
         futures = []
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_threads) as executor:
             for long_name in name_shortcuts.values():
 
                 if os.path.exists(file_path):
@@ -460,7 +460,7 @@ def merge_cur_hist(data_source, cur_file, current_dir, hist_dir, force_copy_all_
             print(f"Error deleting {cur_file_path}: {e}")
             
             
-def merge_current_to_historic(data_source, current_dir, hist_dir, force_copy_all_current = False):
+def merge_current_to_historic(data_source, current_dir, hist_dir, force_copy_all_current = False, max_threads=19):
     # move into function
     current_files = set(os.listdir(current_dir))
     hist_files = set(os.listdir(hist_dir))
@@ -473,7 +473,7 @@ def merge_current_to_historic(data_source, current_dir, hist_dir, force_copy_all
     # if the historic and current files dont match, do not run merge
     if not mismatched_files:
         futures = []
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_threads) as executor:
             for cur_file in current_files:
                 futures.append(executor.submit(merge_cur_hist, data_source, cur_file, current_dir, hist_dir, force_copy_all_current = False))
     
