@@ -56,7 +56,7 @@ var_name=','.join([str(elem) for elem in [
 #var_name = 'temperature_2m'
 start_date="2023-01-01"
 end_date="2024-07-31"
-interp_mode = 'snap'
+interp_mode = 'idw'
 
 url = f"http://127.0.0.1:8000/historic/?format=json&data_source={data_source}&lat={lat}&lon={lon}&var_name={var_name}&start_date={start_date}&end_date={end_date}&interp_mode={interp_mode}"
 

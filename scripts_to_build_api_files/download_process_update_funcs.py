@@ -15,12 +15,41 @@ import xarray as xr
 from dotenv import load_dotenv
 load_dotenv() # load the env variables from the .env file, needs to have CDSAPI_URL and CDSAPI_KEY from your cds store account
 
+var_to_collect_era5 = ['10m_u_component_of_wind', '10m_v_component_of_wind','2m_dewpoint_temperature','2m_temperature','soil_temperature_level_1', 'soil_temperature_level_2', 'soil_temperature_level_3',
+                    'runoff','soil_temperature_level_1', 'soil_temperature_level_2', 'soil_temperature_level_3','sub_surface_runoff', 'surface_runoff','surface_pressure','total_precipitation',
+                    'volumetric_soil_water_layer_1', 'volumetric_soil_water_layer_2', 'volumetric_soil_water_layer_3', 'cloud_base_height','evaporation','high_cloud_cover','medium_cloud_cover',
+                    'low_cloud_cover','potential_evaporation','snow_depth','snowfall','soil_type','total_cloud_cover']
+
+var_to_collect_era5_land = ['evaporation_from_bare_soil', 'evaporation_from_open_water_surfaces_excluding_oceans', 'evaporation_from_the_top_of_canopy',
+                    'evaporation_from_vegetation_transpiration', 'potential_evaporation', 'runoff',
+                    'soil_temperature_level_1', 'soil_temperature_level_2', 'soil_temperature_level_3',
+                    'sub_surface_runoff', 'surface_runoff', 'total_evaporation',
+                    'volumetric_soil_water_layer_1', 'volumetric_soil_water_layer_2', 'volumetric_soil_water_layer_3', 
+                    '10m_u_component_of_wind', '10m_v_component_of_wind', '2m_dewpoint_temperature',
+                    '2m_temperature', 'snow_depth', 'snowfall',
+                    'surface_pressure', 'total_precipitation']
 
 
+# def get_max_date(loc_id, max_date_tracker, parquet_list, parquet_dir):
+#     """ for a given loc_id, goes through the files and finds the lowest date stored in the historic parquet files """
+#     subset_files_list = [f for f in parquet_list if f.endswith(f'{loc_id}.parquet')]
+#     max_date = max_date_tracker
+#     for f in subset_files_list:
+#         df = pd.read_parquet(f'{parquet_dir}{f}', columns=['time'])
+#         if not df.empty:
+#             max_date = max(df['time'])    
+#             if max_date < max_date_tracker:
+#                 max_date_tracker = max_date
+#     return loc_id, max_date_tracker
 
-def get_max_date(loc_id, max_date_tracker, parquet_list, parquet_dir):
+def get_max_date(data_source, vname, max_date_tracker, parquet_list, parquet_dir):
     """ for a given loc_id, goes through the files and finds the lowest date stored in the historic parquet files """
-    subset_files_list = [f for f in parquet_list if f.endswith(f'{loc_id}.parquet')]
+    if data_source == 'nasapower':
+        subset_files_list = [f for f in parquet_list if f.endswith(f'{vname}.parquet')]
+    elif data_source == 'era5' or 'era5_land':
+        subset_files_list = [f for f in parquet_list if f.startswith(f'{vname}.parquet')]
+    else:
+        warnings.warn('data source not known')
     max_date = max_date_tracker
     for f in subset_files_list:
         df = pd.read_parquet(f'{parquet_dir}{f}', columns=['time'])
@@ -28,18 +57,28 @@ def get_max_date(loc_id, max_date_tracker, parquet_list, parquet_dir):
             max_date = max(df['time'])    
             if max_date < max_date_tracker:
                 max_date_tracker = max_date
-    return loc_id, max_date_tracker
+    return vname, max_date_tracker
 
-# note this is really slow, so we avoid doing it if we can
+
 # note cpu bound task
-def get_or_build_max_dates(max_dates_path, hist_list, hist_dir, coords, start_date = '2001-01-01', max_threads = 19):
+def get_or_build_max_dates(data_source, max_dates_path, hist_list, hist_dir, coords = None, start_date = '2001-01-01', max_threads = 19):
     
     if not os.path.exists(max_dates_path) and hist_list:
         print('building the max dates file, this may take a while')
         max_dates_dict = {}
         max_date_tracker_base = datetime.now()
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_threads) as executor:
-            future_to_file = {executor.submit(get_max_date, int(row['loc_id']), max_date_tracker_base, hist_list, hist_dir): row['loc_id'] for _, row in coords.iterrows()}
+            if data_source == 'nasapower':
+                if not coords.empty:
+                    future_to_file = {executor.submit(get_max_date, data_source, int(row['loc_id']), max_date_tracker_base, hist_list, hist_dir): row['loc_id'] for _, row in coords.iterrows()}
+                else:
+                    warnings.warn('nasapower needs to have the coords dataframe passed in')
+            elif data_source == 'era5':
+                future_to_file = {executor.submit(get_max_date, data_source, var_name, max_date_tracker_base, hist_list, hist_dir): var_name for var_name in var_to_collect_era5} 
+            elif data_source == 'era5_land':
+                future_to_file = {executor.submit(get_max_date, data_source, var_name, max_date_tracker_base, hist_list, hist_dir): var_name for var_name in var_to_collect_era5_land} 
+            else:
+                warnings.warn('data soruce unkown')
             for future in tqdm(concurrent.futures.as_completed(future_to_file), total=len(future_to_file)):
                 file = future_to_file[future]
                 try:
@@ -48,15 +87,15 @@ def get_or_build_max_dates(max_dates_path, hist_list, hist_dir, coords, start_da
                 except Exception as exc:
                     print(f'{file} generated an exception: {exc}')
 
-        end_hist_dates_df = pd.DataFrame(list(max_dates_dict.items()), columns=['loc_id', 'time'])
+        end_hist_dates_df = pd.DataFrame(list(max_dates_dict.items()), columns=['vname', 'time'])
         end_hist_dates_df.to_csv(max_dates_path, index=False)
     
     elif os.path.exists(max_dates_path):
         end_hist_dates_df = pd.read_csv(max_dates_path)
         
     else: 
-        end_hist_dates_df = pd.DataFrame(list(max_dates_dict.items()), columns=['loc_id', 'time'])
-        new_row = pd.DataFrame({'loc_id': [0], 'time': [pd.Timestamp(start_date + ' 00:00:00')]})
+        end_hist_dates_df = pd.DataFrame(list(max_dates_dict.items()), columns=['vname', 'time'])
+        new_row = pd.DataFrame({'vname': [0], 'time': [pd.Timestamp(start_date + ' 00:00:00')]})
         end_hist_dates_df = pd.concat([new_row, end_hist_dates_df], ignore_index=True)
         
     return end_hist_dates_df
@@ -126,6 +165,10 @@ def get_unique_months_years(start_date, end_date):
 
 
 def get_era5_data(year, month, var_to_collect, raw_dir, ds_name_string):
+    if ds_name_string == 'reanalysis-era5-land':
+        exten = '.netcdf.zip' 
+    else:
+        exten = '.nc'
     c = cdsapi.Client()
 
     data = c.retrieve(
@@ -161,18 +204,18 @@ def get_era5_data(year, month, var_to_collect, raw_dir, ds_name_string):
             ],
             'area': [-33.3, 164.64, -47.24, 179.53],
         },
-        f"{raw_dir}{var_to_collect}_{year}_{month}.nc")
+        f"{raw_dir}{var_to_collect}_{year}_{month}{exten}")
     
 
     
-def get_and_write_raw(data_source,end_hist_dates_df, end_date, raw_dir, coords, max_threads=19):
+def get_and_write_raw(data_source, end_hist_dates_df, end_date, raw_dir, coords, max_threads=19):
     try:
         print(f'downloading the raw data for {data_source}')
         if data_source == 'nasapower':
             futures = []
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_threads) as executor:
                 for _, row in coords.iterrows():
-                    start_date = pd.to_datetime(end_hist_dates_df[end_hist_dates_df.loc_id == int(row.loc_id)].time.values[0])
+                    start_date = pd.to_datetime(end_hist_dates_df[end_hist_dates_df.vname == int(row.loc_id)].time.values[0])
                     start_date = (start_date - relativedelta(months=1)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
                     futures.append(executor.submit(create_full_nasapower_df, row, start_date, end_date, raw_dir))
                 
@@ -182,31 +225,21 @@ def get_and_write_raw(data_source,end_hist_dates_df, end_date, raw_dir, coords, 
                     except Exception as exc:
                         print(f'Error in processing: {exc}')
                         
-        elif data_source == 'era5' or data_source == 'era5_land':
-            start_date = pd.to_datetime(min(end_hist_dates_df['time']))
-
-            start_date = (start_date - relativedelta(months=5)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-            monthly_yearly_list = get_unique_months_years(start_date, end_date)
-            
+        elif data_source == 'era5' or data_source == 'era5_land':            
             if data_source == 'era5':
                 ds_name_string = 'reanalysis-era5-single-levels'
-                var_to_collect = ['10m_u_component_of_wind', '10m_v_component_of_wind','2m_dewpoint_temperature','2m_temperature','soil_temperature_level_1', 'soil_temperature_level_2', 'soil_temperature_level_3',
-                    'runoff','soil_temperature_level_1', 'soil_temperature_level_2', 'soil_temperature_level_3','sub_surface_runoff', 'surface_runoff','surface_pressure','total_precipitation',
-                    'volumetric_soil_water_layer_1', 'volumetric_soil_water_layer_2', 'volumetric_soil_water_layer_3', 'cloud_base_height','evaporation','high_cloud_cover','medium_cloud_cover',
-                    'low_cloud_cover','potential_evaporation','snow_depth','snowfall','soil_type','total_cloud_cover']
+                vars_to_collect = var_to_collect_era5
             elif data_source == 'era5_land':
                 ds_name_string = 'reanalysis-era5-land'
-                var_to_collect = ['evaporation_from_bare_soil', 'evaporation_from_open_water_surfaces_excluding_oceans', 'evaporation_from_the_top_of_canopy',
-                    'evaporation_from_vegetation_transpiration', 'potential_evaporation', 'runoff',
-                    'soil_temperature_level_1', 'soil_temperature_level_2', 'soil_temperature_level_3',
-                    'sub_surface_runoff', 'surface_runoff', 'total_evaporation',
-                    'volumetric_soil_water_layer_1', 'volumetric_soil_water_layer_2', 'volumetric_soil_water_layer_3', 
-                    '10m_u_component_of_wind', '10m_v_component_of_wind', '2m_dewpoint_temperature',
-                    '2m_temperature', 'snow_depth', 'snowfall',
-                    'surface_pressure', 'total_precipitation']
+                vars_to_collect = var_to_collect_era5_land
             
-            requested_combinations = list(itertools.product(monthly_yearly_list, var_to_collect))
+            requested_combinations = list()
+            for vc in vars_to_collect:
+                start_date = pd.to_datetime(min(end_hist_dates_df[end_hist_dates_df['vname'] == vc]['time']))
+                start_date = (start_date - relativedelta(months=5)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                monthly_yearly_list = get_unique_months_years(start_date, end_date)
+                requested_combinations.extend(list(itertools.product(monthly_yearly_list, [vc])))
+
             requested_combinations = [(year, month, var) for (month, year), var in requested_combinations]
 
             futures = []
@@ -222,7 +255,7 @@ def get_and_write_raw(data_source,end_hist_dates_df, end_date, raw_dir, coords, 
                         print(f'Error in processing: {exc}')
             
     except Exception as e:
-        print(f'Error processing loc_id {row.loc_id}: {e}')
+        print(f'Error processing: {e}')
         
         
         
@@ -264,14 +297,15 @@ def load_nc_file(data_source, file_name, raw_dir, name_shortcuts, locs_df_int):
     elif data_source == "era5_land":
         with zipfile.ZipFile(f'{raw_dir}{file_name}', 'r') as zip_ref:
             zip_ref.extractall()  # Extract files to a temporary folder
-            df = xr.open_dataset('data.nc').to_dataframe().reset_index().dropna()
-            
-    var_name = get_cur_var_name(df.columns.tolist())
+            df = xr.open_dataset('data.nc', engine='netcdf4').to_dataframe().reset_index().dropna()
+
+    var_name = get_cur_var_name(df.columns.tolist(), name_shortcuts)
     df = df[['longitude', 'latitude', 'time', var_name]]
     df.rename(columns=name_shortcuts, inplace=True)
     long_name = name_shortcuts.get(var_name)
+    
     df = pl.from_pandas(df)
-    if long_name in ['soil_temperature_level_1','soil_temperature_level_2','soil_temperature_level_3','2m_dewpoint_temperature','temperature_2m']:
+    if long_name in ['soil_temperature_level_1','soil_temperature_level_2','soil_temperature_level_3','dewpoint_temperature_2m','temperature_2m']:
         df = (df.select([pl.col(long_name) - 273.15, pl.exclude(long_name)]))
 
     df = df.with_columns([
@@ -283,7 +317,7 @@ def load_nc_file(data_source, file_name, raw_dir, name_shortcuts, locs_df_int):
     df_merge = df_merge.drop(['longitude', 'latitude', 'longitude_int', 'latitude_int'])
     return df_merge 
 
-def merge_dataframes(data_source, long_name, raw_dir, name_shortcuts):
+def merge_dataframes(data_source, long_name, raw_dir, name_shortcuts, locs_df_int):
     if long_name == 'dewpoint_temperature_2m':
         long_name_og = '2m_dewpoint_temperature'
     elif long_name == 'temperature_2m':
@@ -294,9 +328,8 @@ def merge_dataframes(data_source, long_name, raw_dir, name_shortcuts):
         long_name_og = long_name
     merged_df = None
     for file_name in os.listdir(raw_dir):
-        
         if file_name.split("_")[:-2]==long_name_og.split("_") and (file_name.endswith('.netcdf.zip') or  file_name.endswith('.nc')):
-            df = load_nc_file(data_source, file_name, raw_dir, name_shortcuts)
+            df = load_nc_file(data_source, file_name, raw_dir, name_shortcuts, locs_df_int)
             if merged_df is None:
                 merged_df = df
             else:
@@ -304,9 +337,8 @@ def merge_dataframes(data_source, long_name, raw_dir, name_shortcuts):
     merged_df = merged_df.sort("time")
     return merged_df
 
-def write_var_loc_to_para(data_source, long_name, raw_dir, current_dir, unique_locs, name_shortcuts):
-    
-    df = merge_dataframes(data_source, long_name, raw_dir, name_shortcuts)
+def write_var_loc_to_para(data_source, long_name, raw_dir, current_dir, unique_locs, locs_df_int, name_shortcuts):
+    df = merge_dataframes(data_source, long_name, raw_dir, name_shortcuts, locs_df_int)
     for loc in unique_locs:
         filtered_df = df.filter(pl.col('loc_id') == loc)
         filtered_df = filtered_df.drop(['loc_id'])
@@ -336,7 +368,8 @@ def convert_raw_to_parquet_current(data_source, coords, raw_dir, current_dir, ma
         locs_df_int[['longitude_int', 'latitude_int']] = (coords[['longitude', 'latitude']]*1000).round().astype(int)
         locs_df_int = locs_df_int.drop(columns=['longitude', 'latitude'])
         locs_df_int = pl.from_pandas(locs_df_int)
-        unique_locs = locs_df_int['loc_id'].unique().to_list()
+        locs_df_int = locs_df_int.with_columns(pl.col('loc_id').cast(pl.Int64))
+        
         
         if data_source == 'era5':
             name_shortcuts = {'u10': '10m_u_component_of_wind',
@@ -389,20 +422,26 @@ def convert_raw_to_parquet_current(data_source, coords, raw_dir, current_dir, ma
                 'sf':'snowfall',
                 'sp':'surface_pressure',
                 'tp':'precipitation'}
-            
-        futures = []
-        with concurrent.futures.ProcessPoolExecutor(max_workers=max_threads) as executor:
-            for long_name in name_shortcuts.values():
-
-                if os.path.exists(file_path):
-                    futures.append(executor.submit(write_var_loc_to_para, data_source, long_name, raw_dir, current_dir, unique_locs, name_shortcuts))
+        unique_locs = locs_df_int['loc_id'].unique().to_list()
+        # futures = []
+        # with concurrent.futures.ProcessPoolExecutor(max_workers=max_threads) as executor:
+        #     for long_name in name_shortcuts.values():
+        #         futures.append(executor.submit(write_var_loc_to_para, data_source, long_name, raw_dir, current_dir, unique_locs, locs_df_int, name_shortcuts))
     
-            for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures)):
-                try:
-                    result = future.result()
-                except Exception as exc:
-                    print(f'Error in processing: {exc}')
-                    
+        #     for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures)):
+        #         try:
+        #             result = future.result()
+        #         except Exception as exc:
+        #             print(f'Error in processing: {exc}')
+        results = []
+
+        # Iterate over each long_name in name_shortcuts.values() and process sequentially
+        for long_name in name_shortcuts.values():
+            try:
+                result = write_var_loc_to_para(data_source, long_name, raw_dir, current_dir, unique_locs, locs_df_int, name_shortcuts)
+                results.append(result)
+            except Exception as exc:
+                print(f'Error in processing: {exc}')
                     
                     
                     
@@ -422,7 +461,6 @@ def merge_cur_hist(data_source, cur_file, current_dir, hist_dir, force_copy_all_
     except Exception as e:
         print(f"Error reading {hist_file_path}: {e}")
         pass
-    
     if data_source == 'era5' or data_source == 'era5_land':
         months_to_remove = 5
     elif data_source == 'nasapower':
@@ -440,7 +478,8 @@ def merge_cur_hist(data_source, cur_file, current_dir, hist_dir, force_copy_all_
     if cur_to_hist.is_empty():
         return
 
-    hist_file = hist_file.with_columns(pl.col(hist_file.columns[1]).cast(pl.Float64))
+    hist_col_names = [col for col in hist_file.columns if col != 'time']
+    hist_file = hist_file.with_columns(pl.col(hist_col_names).cast(pl.Float64))
     new_hist = pl.concat([cur_to_hist, hist_file], how='vertical')
     new_hist = new_hist.unique(subset=["time"], keep="first")
     new_hist = new_hist.sort('time') 
@@ -469,10 +508,7 @@ def merge_current_to_historic(data_source, current_dir, hist_dir, force_copy_all
     hist_files = set(os.listdir(hist_dir))
 
     mismatched_files = list(current_files-hist_files)+list(hist_files-current_files)
-
-    warnings.warn(f'files in current but not historic: {current_files-hist_files} will not perform merge')
-    warnings.warn(f'files in historic but not current: {hist_files-current_files} will not perform merge')
-
+    print(mismatched_files)
     # if the historic and current files dont match, do not run merge
     if not mismatched_files:
         futures = []
@@ -486,3 +522,6 @@ def merge_current_to_historic(data_source, current_dir, hist_dir, force_copy_all
                     result = future.result()
                 except Exception as exc:
                     print(f'Error in processing: {exc}')
+    else:
+        warnings.warn(f'files in current but not historic: {current_files-hist_files} will not perform merge')
+        warnings.warn(f'files in historic but not current: {hist_files-current_files} will not perform merge')
