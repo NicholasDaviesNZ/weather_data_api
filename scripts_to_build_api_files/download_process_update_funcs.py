@@ -165,46 +165,45 @@ def get_unique_months_years(start_date, end_date):
 
 
 def get_era5_data(year, month, var_to_collect, raw_dir, ds_name_string):
-    if ds_name_string == 'reanalysis-era5-land':
-        exten = '.netcdf.zip' 
-    else:
-        exten = '.nc'
-    c = cdsapi.Client()
+    try:
+        c = cdsapi.Client()
 
-    data = c.retrieve(
-        ds_name_string,
-        {
-            'product_type': 'reanalysis',
-            'format': 'netcdf',
-            'variable': var_to_collect,
-            'year': str(year),
-            'month': str(month),
-            'day': [
-                '01', '02', '03',
-                '04', '05', '06',
-                '07', '08', '09',
-                '10', '11', '12',
-                '13', '14', '15',
-                '16', '17', '18',
-                '19', '20', '21',
-                '22', '23', '24',
-                '25', '26', '27',
-                '28', '29', '30',
-                '31',
-            ],
-            'time': [
-                '00:00', '01:00', '02:00',
-                '03:00', '04:00', '05:00',
-                '06:00', '07:00', '08:00',
-                '09:00', '10:00', '11:00',
-                '12:00', '13:00', '14:00',
-                '15:00', '16:00', '17:00',
-                '18:00', '19:00', '20:00',
-                '21:00', '22:00', '23:00',
-            ],
-            'area': [-33.3, 164.64, -47.24, 179.53],
-        },
-        f"{raw_dir}{var_to_collect}_{year}_{month}{exten}")
+        data = c.retrieve(
+            ds_name_string,
+            {
+                'product_type': 'reanalysis',
+                'format': 'netcdf',
+                'variable': var_to_collect,
+                'year': str(year),
+                'month': str(month),
+                'day': [
+                    '01', '02', '03',
+                    '04', '05', '06',
+                    '07', '08', '09',
+                    '10', '11', '12',
+                    '13', '14', '15',
+                    '16', '17', '18',
+                    '19', '20', '21',
+                    '22', '23', '24',
+                    '25', '26', '27',
+                    '28', '29', '30',
+                    '31',
+                ],
+                'time': [
+                    '00:00', '01:00', '02:00',
+                    '03:00', '04:00', '05:00',
+                    '06:00', '07:00', '08:00',
+                    '09:00', '10:00', '11:00',
+                    '12:00', '13:00', '14:00',
+                    '15:00', '16:00', '17:00',
+                    '18:00', '19:00', '20:00',
+                    '21:00', '22:00', '23:00',
+                ],
+                'area': [-33.3, 164.64, -47.24, 179.53],
+            },
+            f"{raw_dir}{var_to_collect}_{year}_{month}.nc")
+    except:
+        pass
     
 
     
@@ -242,6 +241,8 @@ def get_and_write_raw(data_source, end_hist_dates_df, end_date, raw_dir, coords,
 
             requested_combinations = [(year, month, var) for (month, year), var in requested_combinations]
 
+            # for year, month, var_to_collect in requested_combinations:
+            #         get_era5_data(year, month, var_to_collect, raw_dir, ds_name_string)
             futures = []
             with concurrent.futures.ProcessPoolExecutor(max_workers=max_threads) as executor:
                 for year, month, var_to_collect in requested_combinations:
@@ -292,13 +293,12 @@ def get_cur_var_name(col_names, name_shortcuts):
         return filtered_variable_names[0]
     
 def load_nc_file(data_source, file_name, raw_dir, name_shortcuts, locs_df_int):
-    if data_source == "era5":
+    if file_name.endswith('.nc'):
         df = xr.open_dataset(f'{raw_dir}{file_name}').to_dataframe().reset_index().dropna()
-    elif data_source == "era5_land":
+    elif file_name.endswith('.netcdf.zip'):
         with zipfile.ZipFile(f'{raw_dir}{file_name}', 'r') as zip_ref:
             zip_ref.extractall()  # Extract files to a temporary folder
             df = xr.open_dataset('data.nc', engine='netcdf4').to_dataframe().reset_index().dropna()
-
     var_name = get_cur_var_name(df.columns.tolist(), name_shortcuts)
     df = df[['longitude', 'latitude', 'time', var_name]]
     df.rename(columns=name_shortcuts, inplace=True)

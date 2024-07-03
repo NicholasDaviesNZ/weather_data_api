@@ -66,8 +66,8 @@ def process_weather_data(data_source, num_threads=19):
     end_date = datetime.now()
 
     # Note: all of these are parallel and are set with max_threads=19 by default
-    end_hist_dates_df = get_or_build_max_dates(data_source, max_dates_path, hist_list, hist_dir, coords)
-    get_and_write_raw(data_source, end_hist_dates_df, end_date, raw_dir, coords) 
+    #end_hist_dates_df = get_or_build_max_dates(data_source, max_dates_path, hist_list, hist_dir, coords)
+    #get_and_write_raw(data_source, end_hist_dates_df, end_date, raw_dir, coords) 
     convert_raw_to_parquet_current(data_source, coords, raw_dir, current_dir) # era5 need remove everything that is not in the cooreds file
     merge_current_to_historic(data_source, current_dir, hist_dir, force_copy_all_current=False)
 
@@ -78,3 +78,4 @@ def process_weather_data_task(data_source, num_threads=19):
 
 
 process_weather_data_task('era5_land')
+
