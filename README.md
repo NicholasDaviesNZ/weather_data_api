@@ -1,1 +1,2 @@
 # weather_data_api
+This repo contains a django rest framework api which can be used for accsessing NASAPOWER, ERA5 and ERA5_Land data You should just be able to clone and run docker-compose build to get the api itself. You will then need to create a .env file with your credentials for the CDS so that the ERA data can be downloaded.
