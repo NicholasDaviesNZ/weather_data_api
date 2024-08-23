@@ -77,5 +77,5 @@ def process_weather_data_task(data_source, num_threads=19):
     process_weather_data(data_source)
 
 
-process_weather_data_task('era5_land')
+process_weather_data_task('era5')
 

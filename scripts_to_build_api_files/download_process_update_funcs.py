@@ -202,8 +202,9 @@ def get_era5_data(year, month, var_to_collect, raw_dir, ds_name_string):
                 'area': [-33.3, 164.64, -47.24, 179.53],
             },
             f"{raw_dir}{var_to_collect}_{year}_{month}.nc")
+        return True
     except:
-        pass
+        return False
     
 
     
@@ -503,6 +504,7 @@ def merge_cur_hist(data_source, cur_file, current_dir, hist_dir, force_copy_all_
             
             
 def merge_current_to_historic(data_source, current_dir, hist_dir, force_copy_all_current = False, max_threads=19):
+    print('merginge current files into historic')
     # move into function
     current_files = set(os.listdir(current_dir))
     hist_files = set(os.listdir(hist_dir))
@@ -511,17 +513,20 @@ def merge_current_to_historic(data_source, current_dir, hist_dir, force_copy_all
     print(mismatched_files)
     # if the historic and current files dont match, do not run merge
     if not mismatched_files:
-        futures = []
-        print('merging older current files into the historic files, this may take a while')
-        with concurrent.futures.ProcessPoolExecutor(max_workers=max_threads) as executor:
-            for cur_file in current_files:
-                futures.append(executor.submit(merge_cur_hist, data_source, cur_file, current_dir, hist_dir, force_copy_all_current = False))
+        for cur_file in current_files:
+            merge_cur_hist(data_source, cur_file, current_dir, hist_dir, force_copy_all_current = False)
+        
+        # futures = []
+        # print('merging older current files into the historic files, this may take a while')
+        # with concurrent.futures.ProcessPoolExecutor(max_workers=max_threads) as executor:
+        #     for cur_file in current_files:
+        #         futures.append(executor.submit(merge_cur_hist, data_source, cur_file, current_dir, hist_dir, force_copy_all_current = False))
     
-            for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures)):
-                try:
-                    result = future.result()
-                except Exception as exc:
-                    print(f'Error in processing: {exc}')
+        #     for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures)):
+        #         try:
+        #             result = future.result()
+        #         except Exception as exc:
+        #             print(f'Error in processing: {exc}')
     else:
         warnings.warn(f'files in current but not historic: {current_files-hist_files} will not perform merge')
         warnings.warn(f'files in historic but not current: {hist_files-current_files} will not perform merge')
