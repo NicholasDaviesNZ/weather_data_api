@@ -1,0 +1,24 @@
+vname,time
+evaporation_from_bare_soil,2024-07-01 02:02:44.215579
+evaporation_from_open_water_surfaces_excluding_oceans,2024-07-01 02:02:44.215579
+evaporation_from_the_top_of_canopy,2024-07-01 02:02:44.215579
+evaporation_from_vegetation_transpiration,2024-07-01 02:02:44.215579
+potential_evaporation,2024-07-01 02:02:44.215579
+runoff,2024-07-01 02:02:44.215579
+soil_temperature_level_1,2024-07-01 02:02:44.215579
+soil_temperature_level_2,2024-07-01 02:02:44.215579
+soil_temperature_level_3,2024-07-01 02:02:44.215579
+sub_surface_runoff,2024-07-01 02:02:44.215579
+surface_runoff,2024-07-01 02:02:44.215579
+total_evaporation,2024-07-01 02:02:44.215579
+volumetric_soil_water_layer_1,2024-07-01 02:02:44.215579
+volumetric_soil_water_layer_2,2024-07-01 02:02:44.215579
+volumetric_soil_water_layer_3,2024-07-01 02:02:44.215579
+10m_u_component_of_wind,2024-07-01 02:02:44.215579
+10m_v_component_of_wind,2024-07-01 02:02:44.215579
+2m_dewpoint_temperature,2024-07-01 02:02:44.215579
+snow_depth,2024-07-01 02:02:44.215579
+2m_temperature,2024-07-01 02:02:44.215579
+snowfall,2024-07-01 02:02:44.215579
+surface_pressure,2024-07-01 02:02:44.215579
+total_precipitation,2024-07-01 02:02:44.215579

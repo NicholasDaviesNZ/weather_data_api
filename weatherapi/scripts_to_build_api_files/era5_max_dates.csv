@@ -1,0 +1,26 @@
+vname,time
+10m_u_component_of_wind,2024-06-30 22:13:21.436050
+10m_v_component_of_wind,2024-06-30 22:13:21.436050
+2m_dewpoint_temperature,2024-06-30 22:13:21.436050
+2m_temperature,2024-06-30 22:13:21.436050
+soil_temperature_level_1,2024-06-30 22:13:21.436050
+soil_temperature_level_2,2024-06-30 22:13:21.436050
+soil_temperature_level_3,2024-06-30 22:13:21.436050
+runoff,2024-06-30 22:13:21.436050
+sub_surface_runoff,2024-06-30 22:13:21.436050
+surface_runoff,2024-06-30 22:13:21.436050
+surface_pressure,2024-06-30 22:13:21.436050
+total_precipitation,2024-06-30 22:13:21.436050
+volumetric_soil_water_layer_1,2024-06-30 22:13:21.436050
+volumetric_soil_water_layer_2,2024-06-30 22:13:21.436050
+volumetric_soil_water_layer_3,2024-06-30 22:13:21.436050
+cloud_base_height,2024-06-30 22:13:21.436050
+evaporation,2024-06-30 22:13:21.436050
+high_cloud_cover,2024-06-30 22:13:21.436050
+medium_cloud_cover,2024-06-30 22:13:21.436050
+low_cloud_cover,2024-06-30 22:13:21.436050
+potential_evaporation,2024-06-30 22:13:21.436050
+snow_depth,2024-06-30 22:13:21.436050
+snowfall,2024-06-30 22:13:21.436050
+soil_type,2024-06-30 22:13:21.436050
+total_cloud_cover,2024-06-30 22:13:21.436050

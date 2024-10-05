@@ -44,10 +44,10 @@ var_name = 'temperature_2m'
 start_date="2022-06-01"
 end_date="2023-05-31"
 interp_mode = 'snap'
-data_source = 'era5'
+data_source = 'era5_land'
 
 
-csv_file = 'nz_coords_era5.csv' 
+csv_file = 'nz_coords_era5_land.csv' 
 coords = pd.read_csv(csv_file)
 
 coords_dict = coords.set_index('loc_id').T.to_dict()
