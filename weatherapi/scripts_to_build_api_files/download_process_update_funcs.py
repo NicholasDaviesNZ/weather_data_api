@@ -61,9 +61,9 @@ def get_max_date(data_source, vname, max_date_tracker, parquet_list, parquet_dir
 
 
 # note cpu bound task
-def get_or_build_max_dates(data_source, max_dates_path, hist_list, hist_dir, coords = None, start_date = '2001-01-01', max_threads = 19):
+def get_or_build_max_dates(data_source, max_dates_path, hist_list, hist_dir, coords = None, start_date = '2001-01-01', write_to_file = False, max_threads = 19):
     
-    if not os.path.exists(max_dates_path) and hist_list:
+    if hist_list:
         print('building the max dates file, this may take a while')
         max_dates_dict = {}
         max_date_tracker_base = datetime.now()
@@ -88,15 +88,14 @@ def get_or_build_max_dates(data_source, max_dates_path, hist_list, hist_dir, coo
                     print(f'{file} generated an exception: {exc}')
 
         end_hist_dates_df = pd.DataFrame(list(max_dates_dict.items()), columns=['vname', 'time'])
-        end_hist_dates_df.to_csv(max_dates_path, index=False)
-    
-    elif os.path.exists(max_dates_path):
-        end_hist_dates_df = pd.read_csv(max_dates_path)
         
     else: 
         end_hist_dates_df = pd.DataFrame(list(max_dates_dict.items()), columns=['vname', 'time'])
         new_row = pd.DataFrame({'vname': [0], 'time': [pd.Timestamp(start_date + ' 00:00:00')]})
         end_hist_dates_df = pd.concat([new_row, end_hist_dates_df], ignore_index=True)
+
+    if write_to_file == True:
+        end_hist_dates_df.to_csv(max_dates_path, index=False)
         
     return end_hist_dates_df
 
