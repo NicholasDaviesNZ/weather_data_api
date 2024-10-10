@@ -15,20 +15,22 @@ import xarray as xr
 from dotenv import load_dotenv
 load_dotenv() # load the env variables from the .env file, needs to have CDSAPI_URL and CDSAPI_KEY from your cds store account
 
-var_to_collect_era5 = ['10m_u_component_of_wind', '10m_v_component_of_wind','2m_dewpoint_temperature','2m_temperature','soil_temperature_level_1', 'soil_temperature_level_2', 'soil_temperature_level_3',
-                    'runoff','soil_temperature_level_1', 'soil_temperature_level_2', 'soil_temperature_level_3','sub_surface_runoff', 'surface_runoff','surface_pressure','total_precipitation',
-                    'volumetric_soil_water_layer_1', 'volumetric_soil_water_layer_2', 'volumetric_soil_water_layer_3', 'cloud_base_height','evaporation','high_cloud_cover','medium_cloud_cover',
-                    'low_cloud_cover','potential_evaporation','snow_depth','snowfall','soil_type','total_cloud_cover']
+# var_to_collect_era5 = ['10m_u_component_of_wind', '10m_v_component_of_wind','2m_dewpoint_temperature','2m_temperature','soil_temperature_level_1', 'soil_temperature_level_2', 'soil_temperature_level_3',
+#                     'runoff','soil_temperature_level_1', 'soil_temperature_level_2', 'soil_temperature_level_3','sub_surface_runoff', 'surface_runoff','surface_pressure','total_precipitation',
+#                     'volumetric_soil_water_layer_1', 'volumetric_soil_water_layer_2', 'volumetric_soil_water_layer_3', 'cloud_base_height','evaporation','high_cloud_cover','medium_cloud_cover',
+#                     'low_cloud_cover','potential_evaporation','snow_depth','snowfall','soil_type','total_cloud_cover']
 
-var_to_collect_era5_land = ['evaporation_from_bare_soil', 'evaporation_from_open_water_surfaces_excluding_oceans', 'evaporation_from_the_top_of_canopy',
-                    'evaporation_from_vegetation_transpiration', 'potential_evaporation', 'runoff',
-                    'soil_temperature_level_1', 'soil_temperature_level_2', 'soil_temperature_level_3',
-                    'sub_surface_runoff', 'surface_runoff', 'total_evaporation',
-                    'volumetric_soil_water_layer_1', 'volumetric_soil_water_layer_2', 'volumetric_soil_water_layer_3', 
-                    '10m_u_component_of_wind', '10m_v_component_of_wind', '2m_dewpoint_temperature',
-                    '2m_temperature', 'snow_depth', 'snowfall',
-                    'surface_pressure', 'total_precipitation']
+# var_to_collect_era5_land = ['evaporation_from_bare_soil', 'evaporation_from_open_water_surfaces_excluding_oceans', 'evaporation_from_the_top_of_canopy',
+#                     'evaporation_from_vegetation_transpiration', 'potential_evaporation', 'runoff',
+#                     'soil_temperature_level_1', 'soil_temperature_level_2', 'soil_temperature_level_3',
+#                     'sub_surface_runoff', 'surface_runoff', 'total_evaporation',
+#                     'volumetric_soil_water_layer_1', 'volumetric_soil_water_layer_2', 'volumetric_soil_water_layer_3', 
+#                     '10m_u_component_of_wind', '10m_v_component_of_wind', '2m_dewpoint_temperature',
+#                     '2m_temperature', 'snow_depth', 'snowfall',
+#                     'surface_pressure', 'total_precipitation']
+var_to_collect_era5 = ['2m_temperature','soil_temperature_level_1']
 
+var_to_collect_era5_land = ['2m_temperature','soil_temperature_level_1']
 
 # def get_max_date(loc_id, max_date_tracker, parquet_list, parquet_dir):
 #     """ for a given loc_id, goes through the files and finds the lowest date stored in the historic parquet files """
@@ -61,11 +63,11 @@ def get_max_date(data_source, vname, max_date_tracker, parquet_list, parquet_dir
 
 
 # note cpu bound task
-def get_or_build_max_dates(data_source, max_dates_path, hist_list, hist_dir, coords = None, start_date = '2001-01-01', write_to_file = False, max_threads = 19):
+def get_or_build_max_dates(data_source, hist_list, hist_dir, coords = None, start_date = '2001-01-01', max_threads = 19):
     
+    max_dates_dict = {}
     if hist_list:
         print('building the max dates file, this may take a while')
-        max_dates_dict = {}
         max_date_tracker_base = datetime.now()
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_threads) as executor:
             if data_source == 'nasapower':
@@ -94,15 +96,15 @@ def get_or_build_max_dates(data_source, max_dates_path, hist_list, hist_dir, coo
         new_row = pd.DataFrame({'vname': [0], 'time': [pd.Timestamp(start_date + ' 00:00:00')]})
         end_hist_dates_df = pd.concat([new_row, end_hist_dates_df], ignore_index=True)
 
-    if write_to_file == True:
-        end_hist_dates_df.to_csv(max_dates_path, index=False)
-        
     return end_hist_dates_df
 
 def get_nasapower_year(latitude,longitude,start_date,end_date):
     start_date = int(start_date.replace("-", ""))
     end_date = int(end_date.replace("-", "")) 
-    base_url = r"https://power.larc.nasa.gov//api/temporal/hourly/point?parameters=T2M,RH2M,T2MDEW,PRECTOTCORR,PRECSNOLAND,SNODP,PS,CLOUD_AMT,WS10M,WD10M,WS50M,WD50M&time-standard=UTC&community=SB&longitude={longitude}&latitude={latitude}&start={start}&end={end}&format=JSON"
+
+    # base_url = r"https://power.larc.nasa.gov//api/temporal/hourly/point?parameters=T2M,RH2M,T2MDEW,PRECTOTCORR,PRECSNOLAND,SNODP,PS,CLOUD_AMT,WS10M,WD10M,WS50M,WD50M&time-standard=UTC&community=SB&longitude={longitude}&latitude={latitude}&start={start}&end={end}&format=JSON"
+    base_url = r"https://power.larc.nasa.gov//api/temporal/hourly/point?parameters=T2M&time-standard=UTC&community=SB&longitude={longitude}&latitude={latitude}&start={start}&end={end}&format=JSON"
+
     api_request_url = base_url.format(longitude=longitude, latitude=latitude, start=str(start_date), end=str(end_date))
     response = requests.get(url=api_request_url, verify=True, timeout=30.00)
     content = json.loads(response.content.decode('utf-8'))
@@ -248,13 +250,22 @@ def nasapower_convert_raw_to_parquet_current(row, file_path, parquet_current_dir
     for var_name in var_list:
         try:
             df_out = df[['time',var_name]]
+
+            last_valid_date = df_out[df_out[var_name] != -999.0]['time'].max()
+            df_out = df_out[df_out['time'] <= last_valid_date]
+
+            if (df_out[var_name] == -999.0).any():
+                warnings.warn("some invalid data in nasapower dataset, replacing with nearest values from the same hour of the day")
+                df_out[var_name] = df_out.groupby(df_out['time'].dt.hour, group_keys=False)[var_name].apply(lambda x: x.mask(x == -999.0).ffill().bfill()
+)
+
             df_out = df_out[df_out[var_name] != -999.0]
             df_out.to_parquet(f"{parquet_current_dir}{var_name}_{int(row.loc_id)}.parquet")
         except Exception as exc:
             print(f'Error saving file: {exc}')
             
 def get_cur_var_name(col_names, name_shortcuts):
-    variables_to_remove = ['longitude', 'latitude', 'time']
+    variables_to_remove = ['longitude', 'latitude', 'time', 'valid_time']
     variable_names = [var for var in col_names]
     filtered_variable_names = [var for var in variable_names if var not in variables_to_remove]
     if len(filtered_variable_names) > 1:
@@ -275,16 +286,19 @@ def load_nc_file(data_source, file_name, raw_dir, name_shortcuts, locs_df_int):
         with zipfile.ZipFile(f'{raw_dir}{file_name}', 'r') as zip_ref:
             zip_ref.extractall()  # Extract files to a temporary folder
             df = xr.open_dataset('data.nc', engine='netcdf4').to_dataframe().reset_index().dropna()
+
+    if 'valid_time' in df.columns:
+        df.rename(columns={'valid_time': 'time'}, inplace=True)
     var_name = get_cur_var_name(df.columns.tolist(), name_shortcuts)
 
     if 'time' in df.columns:
         df = df[['longitude', 'latitude', 'time', var_name]]
     elif 'valid_time' in df.columns:
         df = df[['longitude', 'latitude', 'valid_time', var_name]]
-        df.rename({'valid_time': 'time'})
+        df = df.rename({'valid_time': 'time'})
     else:
         UserWarning("time or valid time are missing")
-    
+
     df.rename(columns=name_shortcuts, inplace=True)
     long_name = name_shortcuts.get(var_name)
     df = pl.from_pandas(df)
@@ -293,9 +307,10 @@ def load_nc_file(data_source, file_name, raw_dir, name_shortcuts, locs_df_int):
 
     df = df.with_columns([
         (pl.col('longitude') * 1000).round().cast(pl.Int64).alias('longitude_int'), 
-        (pl.col('latitude') * 1000).round().cast(pl.Int64).alias('latitude_int')
+        (pl.col('latitude') * 1000).round().cast(pl.Int64).alias('latitude_int'),
+        (pl.col(long_name).cast(pl.Float64))
     ])
-
+    # print(df)
     df_merge = df.join(locs_df_int, on=['longitude_int','latitude_int'])
     df_merge = df_merge.drop(['longitude', 'latitude', 'longitude_int', 'latitude_int'])
 
@@ -314,6 +329,7 @@ def merge_dataframes(data_source, long_name, raw_dir, name_shortcuts, locs_df_in
     for file_name in os.listdir(raw_dir):
         if file_name.split("_")[:-2]==long_name_og.split("_") and (file_name.endswith('.netcdf.zip') or  file_name.endswith('.nc')):
             df = load_nc_file(data_source, file_name, raw_dir, name_shortcuts, locs_df_int)
+
             if merged_df is None:
                 merged_df = df
             else:
@@ -466,8 +482,8 @@ def merge_cur_hist(data_source, cur_file, current_dir, hist_dir, force_copy_all_
         return
 
     hist_col_names = [col for col in hist_file.columns if col != 'time']
-    hist_file = hist_file.with_columns(pl.col(hist_col_names).cast(pl.Float32))
-    cur_to_hist = cur_to_hist.with_columns(pl.col(hist_col_names).cast(pl.Float32))
+    hist_file = hist_file.with_columns(pl.col(hist_col_names).cast(pl.Float64))
+    cur_to_hist = cur_to_hist.with_columns(pl.col(hist_col_names).cast(pl.Float64))
     hist_col_order = ['time'] + [col for col in hist_file.columns if col != 'time']
     cur_col_order = ['time'] + [col for col in cur_to_hist.columns if col != 'time']
     hist_file = hist_file.select(hist_col_order)
