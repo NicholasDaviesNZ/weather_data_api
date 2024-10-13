@@ -26,9 +26,11 @@ def process_weather_data(data_source, num_threads=19):
 
     # Note: all of these are parallel and are set with max_threads=19 by default
     end_hist_dates_df = get_or_build_max_dates(data_source, hist_list, hist_dir, coords)
+    print(end_hist_dates_df)
     get_and_write_raw(data_source, end_hist_dates_df, end_date, raw_dir, coords) 
     convert_raw_to_parquet_current(data_source, coords, raw_dir, current_dir, max_threads=1) # era5 need remove everything that is not in the cooreds file
-    merge_current_to_historic(data_source, current_dir, hist_dir, force_copy_all_current=False, max_threads=1)
+
+### do not autorun the merge    # merge_current_to_historic(data_source, current_dir, hist_dir, force_copy_all_current=False, max_threads=1)
 
 # Celery task
 #@app.task

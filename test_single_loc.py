@@ -26,7 +26,7 @@ print(filtered_df)
 # print(df)
 
 
-ns_file = "/workspaces/weather_data_api/weatherapi/historic_weather_api/static/current/nasapower/temperature_2m_4.parquet"
+ns_file = "/workspaces/weather_data_api/weatherapi/historic_weather_api/static/current/era5/temperature_2m_4.parquet"
 
 df = pd.read_parquet(ns_file)
 print(df)
